@@ -1,0 +1,15 @@
+/* 仅保留基础样式，移除可能导致冲突的主题样式 */
+body {
+  margin: 0;
+  padding: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  /* 确保body不会干扰登录页面布局 */
+  display: block;
+  background-color: transparent;
+  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+}
+
+/* 移除其他可能导致冲突的默认样式 */

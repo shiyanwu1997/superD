@@ -1,0 +1,47 @@
+[
+  {
+    "id": 1,
+    "name": "x-prod",
+    "description": "项目A描述",
+    "supervisorConfig": {
+      "host": "localhost",
+      "port": 9001,
+      "username": "user",
+      "password": "123"
+    },
+    "host": "localhost",
+    "port": 9001,
+    "username": "user",
+    "password": "123"
+  },
+  {
+    "id": 2,
+    "name": "x-dev",
+    "description": "adwad",
+    "supervisorConfig": {
+      "host": "localhost",
+      "port": 9002,
+      "username": "user",
+      "password": "123"
+    },
+    "host": "localhost",
+    "port": 9002,
+    "username": "user",
+    "password": "123"
+  },
+  {
+    "id": 3,
+    "name": "mx-dev",
+    "description": "项目C描述",
+    "supervisorConfig": {
+      "host": "localhost",
+      "port": 9004,
+      "username": "user",
+      "password": "123"
+    },
+    "host": "localhost",
+    "port": 9003,
+    "username": "user",
+    "password": "123"
+  }
+]
