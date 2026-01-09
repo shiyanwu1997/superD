@@ -104,10 +104,16 @@ async function startServer() {
     await generateDefaultAdmin();
     
     // 启动服务器
-    app.listen(PORT, () => {
+    const server = app.listen(PORT, () => {
       console.log(`服务器运行在 http://localhost:${PORT}\n`);
       console.log(`当前存储类型: ${STORAGE_CONFIG.TYPE}\n`);
     });
+    
+    // 初始化Socket.io服务器
+    const SocketServer = require('./services/socketServer');
+    new SocketServer(server);
+    console.log('Socket.io 服务器已启动\n');
+    
   } catch (error) {
     console.error('服务器启动失败:', error + '\n');
     process.exit(1);
