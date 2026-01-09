@@ -114,14 +114,26 @@ const getProcessLogs = async (projectId, programName, offset = 0, length = 10000
 // 获取程序标准输出日志
 const getProcessStdoutLog = async (projectId, programName, offset = 0, length = 100000) => {
   try {
+    // 如果 offset 为 -1，表示读取文件末尾
+    if (offset === -1) {
+      // 先获取当前日志文件大小
+      const info = await callRpc(projectId, 'supervisor.getProcessInfo', [programName]);
+      // 计算起始偏移量，确保我们能读取到最新的日志内容
+      const fileSize = info.stdout_logfile_size || 0;
+      offset = Math.max(0, fileSize - length);
+    }
+    
     const logs = await callRpc(projectId, 'supervisor.readProcessStdoutLog', [programName, offset, length]);
+    // 计算新的偏移量
+    const newOffset = offset + (logs.length || 0);
+    
     // 确保日志数据具有正确的换行符格式
     if (typeof logs === 'string') {
       // 统一换行符格式，确保每行日志都以换行符结束
       const normalizedLogs = logs.replace(/\r\n/g, '\n');
-      return normalizedLogs;
+      return { logs: normalizedLogs, offset: newOffset };
     }
-    return logs;
+    return { logs, offset: newOffset };
   } catch (error) {
     console.error(`获取标准输出日志失败 (${programName}):`, error + '\n');
     throw error;
@@ -131,14 +143,26 @@ const getProcessStdoutLog = async (projectId, programName, offset = 0, length = 
 // 获取程序标准错误日志
 const getProcessStderrLog = async (projectId, programName, offset = 0, length = 100000) => {
   try {
+    // 如果 offset 为 -1，表示读取文件末尾
+    if (offset === -1) {
+      // 先获取当前日志文件大小
+      const info = await callRpc(projectId, 'supervisor.getProcessInfo', [programName]);
+      // 计算起始偏移量，确保我们能读取到最新的日志内容
+      const fileSize = info.stderr_logfile_size || 0;
+      offset = Math.max(0, fileSize - length);
+    }
+    
     const logs = await callRpc(projectId, 'supervisor.readProcessStderrLog', [programName, offset, length]);
+    // 计算新的偏移量
+    const newOffset = offset + (logs.length || 0);
+    
     // 确保日志数据具有正确的换行符格式
     if (typeof logs === 'string') {
       // 统一换行符格式，确保每行日志都以换行符结束
       const normalizedLogs = logs.replace(/\r\n/g, '\n');
-      return normalizedLogs;
+      return { logs: normalizedLogs, offset: newOffset };
     }
-    return logs;
+    return { logs, offset: newOffset };
   } catch (error) {
     console.error(`获取标准错误日志失败 (${programName}):`, error + '\n');
     throw error;

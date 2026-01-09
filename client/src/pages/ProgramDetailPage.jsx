@@ -6,38 +6,96 @@ import { getProgramDetail, startProgram, stopProgram, restartProgram, getProgram
 const ProgramDetailPage = ({ isOpen, onClose, programId }) => {
   const [program, setProgram] = useState(null);
   const [logs, setLogs] = useState({ stdout: '', stderr: '' });
+  const [logOffsets, setLogOffsets] = useState({ stdout: 0, stderr: 0 });
   const [loading, setLoading] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(false);
   
   const timerRef = useRef(null);
+  const logOffsetsRef = useRef(logOffsets);
+  const logBufferSize = useRef(1000); // 保留最近1000行日志
+  const isLoadingRef = useRef(false);
+
+  // 同步logOffsets到ref
+  useEffect(() => {
+    logOffsetsRef.current = logOffsets;
+  }, [logOffsets]);
 
   // 获取数据
   const fetchData = useCallback(async (isRefresh = false) => {
-    if (!programId) return;
+    if (!programId || isLoadingRef.current) return;
+    
+    isLoadingRef.current = true;
     if (!isRefresh) setLoading(true);
 
     try {
-      const [detailRes, stdoutRes, stderrRes] = await Promise.all([
-        getProgramDetail(programId),
-        getProgramStdout(programId, 0, 100000), // 读取更多日志内容
-        getProgramStderr(programId, 0, 100000)
-      ]);
+      // 初始加载时获取详情和日志，刷新时只获取日志
+      const promises = [];
+      
+      if (!isRefresh) {
+        promises.push(getProgramDetail(programId));
+      }
+      
+      // 使用ref中的偏移量避免依赖问题
+      const currentOffsets = logOffsetsRef.current;
+      
+      // 只获取新的日志数据
+      promises.push(
+        getProgramStdout(programId, currentOffsets.stdout, 10000),
+        getProgramStderr(programId, currentOffsets.stderr, 10000)
+      );
 
-      setProgram(detailRes.program);
-      setLogs({
-        stdout: (stdoutRes.stdout || '').split('\n').reverse().join('\n'), // 反转以便看最新
-        stderr: (stderrRes.stderr || '').split('\n').reverse().join('\n')
+      const results = await Promise.all(promises);
+      
+      // 更新程序详情
+      if (!isRefresh && results[0]) {
+        setProgram(results[0].program);
+      }
+      
+      // 获取日志结果（根据是否包含详情请求调整索引）
+      const stdoutRes = results[isRefresh ? 0 : 1];
+      const stderrRes = results[isRefresh ? 1 : 2];
+      
+      // 更新日志和偏移量
+      setLogs(prev => {
+        const updateLogs = (type, newLogs, newOffset) => {
+          if (newLogs) {
+            // 追加新日志
+            const updatedLogs = prev[type] + newLogs;
+            // 限制日志行数，防止内存溢出
+            const logLines = updatedLogs.split('\n').filter(line => line.trim() !== '');
+            if (logLines.length > logBufferSize.current) {
+              logLines.splice(0, logLines.length - logBufferSize.current);
+            }
+            return logLines.join('\n');
+          }
+          return prev[type];
+        };
+        
+        return {
+          stdout: updateLogs('stdout', stdoutRes.stdout, stdoutRes.offset),
+          stderr: updateLogs('stderr', stderrRes.stderr, stderrRes.offset)
+        };
       });
+      
+      setLogOffsets(prev => ({
+        stdout: stdoutRes.offset || prev.stdout,
+        stderr: stderrRes.offset || prev.stderr
+      }));
     } catch (error) {
       console.error('获取详情失败:', error);
       message.error('获取详情失败');
     } finally {
       setLoading(false);
+      isLoadingRef.current = false;
     }
   }, [programId]);
 
+  // 组件打开/关闭时的逻辑
   useEffect(() => {
     if (isOpen && programId) {
+      // 初始加载时重置日志偏移量和内容
+      setLogOffsets({ stdout: 0, stderr: 0 });
+      setLogs({ stdout: '', stderr: '' });
       fetchData();
     } else {
       // 关闭时清理状态
@@ -45,20 +103,23 @@ const ProgramDetailPage = ({ isOpen, onClose, programId }) => {
       setLogs({ stdout: '', stderr: '' });
       setAutoRefresh(false);
     }
-  }, [isOpen, programId, fetchData]);
+  }, [isOpen, programId]);
 
   // 自动刷新逻辑
   useEffect(() => {
+    let intervalId = null;
+    
     if (autoRefresh && isOpen && programId) {
-      timerRef.current = setInterval(() => fetchData(true), 2000);
+      // 增加刷新间隔到5秒，减少请求频率
+      intervalId = setInterval(() => fetchData(true), 5000);
     }
+    
     return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
+      if (intervalId) {
+        clearInterval(intervalId);
       }
     };
-  }, [autoRefresh, isOpen, programId, fetchData]);
+  }, [autoRefresh, isOpen, programId]);
 
   const handleAction = async (action) => {
     const msgKey = 'action';

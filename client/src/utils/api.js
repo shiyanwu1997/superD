@@ -100,7 +100,7 @@ export const restartProgram = async (programId) => {
 };
 
 // 获取程序标准输出日志
-export const getProgramStdout = async (programId, offset = 0, length = 100000) => {
+export const getProgramStdout = async (programId, offset = 0, length = 10000) => {
   const response = await api.get(`/programs/${programId}/stdout`, {
     params: { offset, length }
   });
@@ -108,7 +108,7 @@ export const getProgramStdout = async (programId, offset = 0, length = 100000) =
 };
 
 // 获取程序标准错误日志
-export const getProgramStderr = async (programId, offset = 0, length = 100000) => {
+export const getProgramStderr = async (programId, offset = 0, length = 10000) => {
   const response = await api.get(`/programs/${programId}/stderr`, {
     params: { offset, length }
   });

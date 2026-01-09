@@ -14,9 +14,17 @@ const app = express();
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 app.use(cors({
-  origin: CORS_CONFIG.ORIGINS,  // 允许前端开发服务器访问
+  origin: function(origin, callback) {
+    // 允许本地开发环境的所有请求
+    if (!origin || origin.startsWith('http://localhost:')) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true
 }));
+
 
 // 记录请求
 app.use((req, res, next) => {

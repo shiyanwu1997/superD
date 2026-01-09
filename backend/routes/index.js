@@ -293,7 +293,7 @@ router.get('/api/programs/:programId', authMiddleware.verifyToken, async (req, r
 // API: 获取程序标准输出日志
 router.get('/api/programs/:programId/stdout', authMiddleware.verifyToken, async (req, res) => {
   const { programId } = req.params;
-  const { offset = 0, length = 100000 } = req.query;
+  const { offset = 0, length = 10000 } = req.query;
   const userId = req.session.user?.id || req.user.userId;
   
   // 解析动态生成的程序ID (格式: ${projectId}-${programName})
@@ -311,8 +311,8 @@ router.get('/api/programs/:programId/stdout', authMiddleware.verifyToken, async 
   }
   
   try {
-    const stdout = await supervisorService.getProcessStdoutLog(projectIdInt, programName, parseInt(offset), parseInt(length));
-    res.json({ stdout });
+    const result = await supervisorService.getProcessStdoutLog(projectIdInt, programName, parseInt(offset), parseInt(length));
+    res.json({ stdout: result.logs, offset: result.offset });
   } catch (error) {
     console.error('获取标准输出日志失败:', error + '\n');
     res.status(500).json({ error: '服务器错误: ' + error.message });
@@ -322,7 +322,7 @@ router.get('/api/programs/:programId/stdout', authMiddleware.verifyToken, async 
 // API: 获取程序标准错误日志
 router.get('/api/programs/:programId/stderr', authMiddleware.verifyToken, async (req, res) => {
   const { programId } = req.params;
-  const { offset = 0, length = 100000 } = req.query;
+  const { offset = 0, length = 10000 } = req.query;
   const userId = req.session.user?.id || req.user.userId;
   
   // 解析动态生成的程序ID (格式: ${projectId}-${programName})
@@ -340,8 +340,8 @@ router.get('/api/programs/:programId/stderr', authMiddleware.verifyToken, async 
   }
   
   try {
-    const stderr = await supervisorService.getProcessStderrLog(projectIdInt, programName, parseInt(offset), parseInt(length));
-    res.json({ stderr });
+    const result = await supervisorService.getProcessStderrLog(projectIdInt, programName, parseInt(offset), parseInt(length));
+    res.json({ stderr: result.logs, offset: result.offset });
   } catch (error) {
     console.error('获取标准错误日志失败:', error + '\n');
     res.status(500).json({ error: '服务器错误: ' + error.message });
