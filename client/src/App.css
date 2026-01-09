@@ -6,31 +6,34 @@
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  font-family: var(--font-family);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: var(--bg-light);
+  background: var(--bg-primary);
   color: var(--text-primary);
-  line-height: 1.6;
+  line-height: var(--line-height-normal);
   min-height: 100vh;
+  transition: var(--transition);
 }
 
-/* CSS变量定义 - 现代UI设计配色 */
+/* CSS变量定义 - 现代化专业UI配色方案 */
 :root {
-  /* 主色调 */
-  --primary-color: #3B82F6;
-  --primary-dark: #2563EB;
-  --primary-darker: #1D4ED8;
-  --primary-light: #EFF6FF;
-  --primary-hover: #2563EB;
+  /* 主题模式切换 */
+  --color-scheme: light;
+  
+  /* 主色调 - 专业蓝色系 */
+  --primary-color: #2563EB;
+  --primary-dark: #1D4ED8;
+  --primary-darker: #1E40AF;
+  --primary-light: #DBEAFE;
+  --primary-hover: #1D4ED8;
   
   /* 辅助色 */
   --secondary-color: #64748B;
   --secondary-light: #F1F5F9;
+  --secondary-dark: #475569;
   
-  /* 状态色 */
+  /* 状态色 - 高对比度专业配色 */
   --success-color: #10B981;
   --success-dark: #059669;
   --success-light: #D1FAE5;
@@ -43,40 +46,49 @@ body {
   --danger-dark: #DC2626;
   --danger-light: #FEE2E2;
   
-  /* 中性色 */
+  --info-color: #3B82F6;
+  --info-dark: #2563EB;
+  --info-light: #DBEAFE;
+  
+  /* 中性色 - 清晰的层级关系 */
   --text-primary: #1F2937;
   --text-secondary: #6B7280;
   --text-muted: #9CA3AF;
   
-  /* 背景色 */
-  --bg-white: #FFFFFF;
-  --bg-light: #F9FAFB;
-  --bg-gray: #E5E7EB;
-  --bg-hover: #F3F4F6;
+  /* 背景色 - 专业的卡片式设计 */
+  --bg-primary: #FFFFFF;
+  --bg-secondary: #F9FAFB;
+  --bg-tertiary: #F3F4F6;
+  --bg-hover: #F1F5F9;
+  --bg-card: #FFFFFF;
+  --bg-card-hover: #F9FAFB;
   
   /* 边框 */
   --border-color: #E5E7EB;
   --border-hover: #D1D5DB;
+  --border-light: #F3F4F6;
   
-  /* 阴影 */
+  /* 阴影 - 专业的深度感 */
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
   --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
   --shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  --shadow-inner: inset 0 2px 4px 0 rgba(0, 0, 0, 0.06);
   
-  /* 圆角 */
+  /* 圆角 - 现代感设计 */
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 12px;
   --radius-xl: 16px;
   --radius-full: 9999px;
   
-  /* 过渡 */
+  /* 过渡 - 流畅的交互动效 */
   --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   --transition-fast: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
   
-  /* 排版 */
+  /* 排版 - 专业清晰的字体层次 */
   --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
   --font-size-xs: 0.75rem;
   --font-size-sm: 0.875rem;
@@ -86,15 +98,64 @@ body {
   --font-size-2xl: 1.5rem;
   --font-size-3xl: 1.875rem;
   --font-size-4xl: 2.25rem;
+  --font-size-5xl: 3rem;
   
   --font-weight-normal: 400;
   --font-weight-medium: 500;
   --font-weight-semibold: 600;
   --font-weight-bold: 700;
+  --font-weight-extrabold: 800;
   
   --line-height-tight: 1.2;
   --line-height-normal: 1.5;
   --line-height-relaxed: 1.7;
+  
+  /* 布局变量 */
+  --header-height: 70px;
+  --sidebar-width: 250px;
+  --content-padding: 24px;
+  --modal-max-width: 90vw;
+  --card-padding: 20px;
+}
+
+/* 深色模式支持 - 专为运维夜间操作优化 */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-scheme: dark;
+    
+    /* 主色调 - 深色模式适配 */
+    --primary-color: #3B82F6;
+    --primary-dark: #60A5FA;
+    --primary-light: #1E3A8A;
+    
+    /* 辅助色 */
+    --secondary-color: #94A3B8;
+    --secondary-light: #334155;
+    
+    /* 中性色 */
+    --text-primary: #F1F5F9;
+    --text-secondary: #CBD5E1;
+    --text-muted: #94A3B8;
+    
+    /* 背景色 - 深色专业配色 */
+    --bg-primary: #0F172A;
+    --bg-secondary: #1E293B;
+    --bg-tertiary: #334155;
+    --bg-hover: #334155;
+    --bg-card: #1E293B;
+    --bg-card-hover: #334155;
+    
+    /* 边框 */
+    --border-color: #334155;
+    --border-hover: #475569;
+    --border-light: #334155;
+    
+    /* 状态色 - 深色模式适配 */
+    --success-light: #047857;
+    --warning-light: #B45309;
+    --danger-light: #991B1B;
+    --info-light: #1E40AF;
+  }
 }
 
 /* 应用容器 */
@@ -102,49 +163,120 @@ body {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  background: var(--bg-secondary);
 }
+
+/* 主布局 - 包含侧边栏和内容区 */
+.main-layout {
+  display: flex;
+  flex: 1;
+  min-height: calc(100vh - var(--header-height));
+}
+
+/* 侧边栏样式 - 专业导航设计 */
+.sidebar {
+  width: var(--sidebar-width);
+  background: var(--bg-card);
+  border-right: 1px solid var(--border-color);
+  padding: 20px 0;
+  box-shadow: var(--shadow-md);
+  transition: var(--transition);
+}
+
+.sidebar-header {
+  padding: 0 20px 20px;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 20px;
+}
+
+.sidebar-header h2 {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--primary-color);
+  margin: 0;
+}
+
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sidebar-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-weight: var(--font-weight-medium);
+  transition: var(--transition);
+  border-left: 3px solid transparent;
+}
+
+.sidebar-nav-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-left-color: var(--primary-color);
+}
+
+.sidebar-nav-item.active {
+  background: var(--primary-light);
+  color: var(--primary-dark);
+  border-left-color: var(--primary-color);
+}
+
+/* 主内容区 */
+
 
 /* 头部样式 */
 .app-header {
-  background: var(--bg-white);
+  background: var(--bg-card);
   color: var(--text-primary);
-  padding: 0.85rem 1.5rem;
+  padding: 0 var(--content-padding);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-md);
   border-bottom: 1px solid var(--border-color);
-  height: 70px;
+  height: var(--header-height);
+  z-index: 100;
+  transition: var(--transition);
 }
 
 .app-header h1 {
-  font-size: 1.6rem;
-  font-weight: 600;
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-bold);
   color: var(--primary-color);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .nav-links {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  margin-left: 2rem;
+  gap: 16px;
+  margin-left: 32px;
 }
 
 .nav-link-btn {
   background-color: var(--primary-color);
   color: white;
   border: none;
-  padding: 0.5rem 1rem;
+  padding: 0.625rem 1.25rem;
   border-radius: var(--radius-md);
   cursor: pointer;
-  font-size: 0.9rem;
-  font-weight: 500;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
   transition: var(--transition);
   box-shadow: var(--shadow-sm);
   text-decoration: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 8px;
 }
 
 .nav-link-btn:hover {
@@ -155,34 +287,54 @@ body {
 
 .nav-link-btn:active {
   transform: translateY(0);
+  box-shadow: var(--shadow-sm);
+}
+
+.nav-link-btn.secondary {
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.nav-link-btn.secondary:hover {
+  background-color: var(--bg-hover);
+  color: var(--primary-color);
 }
 
 .user-info {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 20px;
 }
 
 .user-details {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 12px;
+  padding: 8px 16px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  transition: var(--transition);
+}
+
+.user-details:hover {
+  background: var(--bg-hover);
 }
 
 .user-info span {
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
   color: var(--text-primary);
+  font-size: var(--font-size-sm);
 }
 
 .change-password-button {
   background-color: var(--primary-color);
   color: white;
   border: none;
-  padding: 0.5rem 1rem;
+  padding: 0.625rem 1.25rem;
   border-radius: var(--radius-md);
   cursor: pointer;
-  font-size: 0.9rem;
-  font-weight: 500;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
   transition: var(--transition);
   box-shadow: var(--shadow-sm);
 }
@@ -195,44 +347,51 @@ body {
 
 .change-password-button:active {
   transform: translateY(0);
+  box-shadow: var(--shadow-sm);
 }
 
 .logout-button {
   background-color: var(--danger-color);
   color: white;
   border: none;
-  padding: 0.5rem 1rem;
+  padding: 0.625rem 1.25rem;
   border-radius: var(--radius-md);
   cursor: pointer;
-  font-size: 0.9rem;
-  font-weight: 500;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
   transition: var(--transition);
   box-shadow: var(--shadow-sm);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .logout-button:hover {
-  background-color: var(--danger-color);
+  background-color: var(--danger-dark);
   transform: translateY(-1px);
   box-shadow: var(--shadow-md);
 }
 
 .logout-button:active {
   transform: translateY(0);
+  box-shadow: var(--shadow-sm);
 }
 
 /* 主内容区域 */
 .main-content {
   flex: 1;
-  padding: 2rem 1.5rem;
+  padding: var(--content-padding);
   max-width: 1400px;
   margin: 0 auto;
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
-  min-height: calc(100vh - 70px);
+  gap: 20px;
+  min-height: calc(100vh - var(--header-height));
   position: relative;
   transition: var(--transition);
+  background: var(--bg-secondary);
+  overflow-y: auto;
 }
 
 /* 页面头部 */
@@ -1948,7 +2107,7 @@ body {
 
 /* 日志容器样式 */
 .expanded-log-container {
-  background-color: var(--bg-gray);
+  background-color: var(--bg-card);
   padding: 1.25rem;
   border-radius: var(--radius-md);
   font-family: 'Courier New', Courier, monospace;
@@ -1958,18 +2117,19 @@ body {
   word-wrap: break-word;
   word-break: break-all;
   overflow: auto;
-  max-height: 500px;
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
+  max-height: 800px;
+  min-height: 400px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
   border: 1px solid var(--border-color);
   resize: both;
-  min-width: 600px;
-  min-height: 300px;
+  min-width: 100%;
+  max-width: 100%;
   transition: var(--transition);
 }
 
 .expanded-log-container:hover {
   border-color: var(--border-hover);
-  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
 /* 程序列表页面 */
@@ -2943,36 +3103,13 @@ body {
   min-height: 100%;
 }
 
-/* 扩展日志容器样式，解决细长条问题 */
-.expanded-log-container {
-  width: auto;
-  min-width: 100%;
-  max-width: 100%;
-  min-height: 600px;
-  max-height: 1000px;
-  overflow: auto;
-  margin: 0;
-  padding: 1.25rem;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  background-color: var(--bg-white);
-  font-family: 'Courier New', Courier, monospace;
-  font-size: 0.925rem;
-  line-height: 1.75;
-  white-space: pre-wrap; /* 保留换行符，同时自动换行 */
-  word-wrap: break-word; /* 长单词自动换行 */
-  word-break: break-all; /* 强制长字符串换行 */
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-  resize: both;
-}
-
 /* 自定义滚动条样式 */
 .expanded-log-container::-webkit-scrollbar {
   width: 8px;
 }
 
 .expanded-log-container::-webkit-scrollbar-track {
-  background: var(--bg-light);
+  background: var(--bg-tertiary);
   border-radius: 4px;
 }
 
@@ -2988,8 +3125,8 @@ body {
 /* 响应式日志容器 */
 @media (max-width: 768px) {
   .expanded-log-container {
-    min-height: 400px;
-    max-height: 800px;
+    min-height: 300px;
+    max-height: 600px;
     font-size: 0.875rem;
     padding: 1rem;
     resize: vertical;

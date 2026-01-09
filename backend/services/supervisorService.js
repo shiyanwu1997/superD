@@ -118,7 +118,8 @@ const getProcessStdoutLog = async (projectId, programName, offset = 0, length = 
     // 确保日志数据具有正确的换行符格式
     if (typeof logs === 'string') {
       // 统一换行符格式，确保每行日志都以换行符结束
-      return logs.replace(/\r\n/g, '\n').replace(/([^\n])$/g, '$1\n');
+      const normalizedLogs = logs.replace(/\r\n/g, '\n');
+      return normalizedLogs;
     }
     return logs;
   } catch (error) {
@@ -134,7 +135,8 @@ const getProcessStderrLog = async (projectId, programName, offset = 0, length = 
     // 确保日志数据具有正确的换行符格式
     if (typeof logs === 'string') {
       // 统一换行符格式，确保每行日志都以换行符结束
-      return logs.replace(/\r\n/g, '\n').replace(/([^\n])$/g, '$1\n');
+      const normalizedLogs = logs.replace(/\r\n/g, '\n');
+      return normalizedLogs;
     }
     return logs;
   } catch (error) {

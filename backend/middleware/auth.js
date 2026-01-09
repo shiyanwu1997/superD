@@ -40,10 +40,10 @@ function checkProgramPermission(req, res, next) {
   next();
 }
 
-// 检查是否为管理员
+// 检查是否为管理员（包括超级管理员和普通管理员）
 function checkAdmin(req, res, next) {
   const user = req.user;
-  if (user.roleId !== 1) {
+  if (user.roleId !== 1 && user.roleId !== 2) {
     return res.status(403).json({ message: '只有管理员才能访问此功能' });
   }
   next();
@@ -78,20 +78,24 @@ async function checkAdminProjectPermission(req, res, next) {
     return next();
   }
   
-  console.log(`检查管理员 ${adminUser.username}（ID: ${adminUser.id}）是否有项目 ${projectId} 的权限`);
-  
   try {
+    // 获取项目名称
+    const project = await db.getProjectById(projectId);
+    const projectName = project ? project.name : '未知项目';
+    
+    console.log(`检查管理员 ${adminUser.username}（ID: ${adminUser.id}）是否有项目 ${projectId}（${projectName}）的权限`);
+    
     // 获取用户的项目权限
     const userProjectPermissions = await db.getAllUserProjectPermissions();
     const userPermissions = userProjectPermissions.filter(perm => perm.userId === adminUser.id);
     console.log(`用户项目权限: ${JSON.stringify(userPermissions)}`);
     
     if (!(await db.checkUserProjectPermission(user.userId, projectId))) {
-      console.log(`管理员 ${adminUser.username} 没有项目 ${projectId} 的权限`);
+      console.log(`管理员 ${adminUser.username} 没有项目 ${projectId}（${projectName}）的权限`);
       return res.status(403).json({ message: '没有权限操作此项目' });
     }
     
-    console.log(`管理员 ${adminUser.username} 有项目 ${projectId} 的权限`);
+    console.log(`管理员 ${adminUser.username} 有项目 ${projectId}（${projectName}）的权限`);
     next();
   } catch (error) {
     console.error('检查项目权限时发生错误:', error);

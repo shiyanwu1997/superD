@@ -40,7 +40,7 @@ const getAllRoles = () => {
 };
 
 // 获取所有用户
-const getAllUsers = () => {
+const getAllUsers = async () => {
   return readJsonFile(USERS_FILE);
 };
 
@@ -66,13 +66,13 @@ const getAllUserProgramPermissions = () => {
 
 // 获取用户信息
 async function getUserByUsername(username) {
-  const users = getAllUsers();
+  const users = await getAllUsers();
   return users.find(user => user.username === username);
 }
 
 // 获取用户角色
-function getUserRole(userId) {
-  const users = getAllUsers();
+async function getUserRole(userId) {
+  const users = await getAllUsers();
   const roles = getAllRoles();
   const user = users.find(u => u.id === userId);
   if (!user) return null;
@@ -80,8 +80,8 @@ function getUserRole(userId) {
 }
 
 // 获取用户可访问的项目列表
-function getUserProjects(userId) {
-  const users = getAllUsers();
+async function getUserProjects(userId) {
+  const users = await getAllUsers();
   const projects = getAllProjects();
   const userProjectPermissions = getAllUserProjectPermissions();
   
@@ -103,10 +103,13 @@ function getUserProjects(userId) {
 
 // 检查用户是否有项目权限
 async function checkUserProjectPermission(userId, projectId) {
-  const users = getAllUsers();
+  const users = await getAllUsers();
   const userProjectPermissions = getAllUserProjectPermissions();
   
-  const user = users.find(u => u.id === userId);
+  const id = parseInt(userId);
+  const pid = parseInt(projectId);
+  
+  const user = users.find(u => u.id === id);
   if (!user) return false;
   
   // admin用户默认拥有所有项目权限
@@ -115,12 +118,12 @@ async function checkUserProjectPermission(userId, projectId) {
   }
   
   // 检查普通用户是否有该项目的权限
-  return userProjectPermissions.some(p => p.userId === userId && p.projectId === projectId);
+  return userProjectPermissions.some(p => p.userId === id && p.projectId === pid);
 }
 
 // 检查用户是否有程序权限
 async function checkUserProgramPermission(userId, programId) {
-  const users = getAllUsers();
+  const users = await getAllUsers();
   const userProjectPermissions = getAllUserProjectPermissions();
   
   const user = users.find(u => u.id === userId);
@@ -198,6 +201,7 @@ function createProject(name, description, host, port, username, password) {
 
 // 更新项目
 function updateProject(projectId, updatedData) {
+  const bcrypt = require('bcrypt');
   const projects = getAllProjects();
   const projectIndex = projects.findIndex(project => project.id === projectId);
   
@@ -225,7 +229,7 @@ function updateProject(projectId, updatedData) {
       host: updatedData.host || updatedProject.supervisorConfig?.host || '',
       port: updatedData.port || updatedData.port === 0 ? updatedData.port : updatedProject.supervisorConfig?.port || 0,
       username: updatedData.username || updatedProject.supervisorConfig?.username || '',
-      password: updatedData.password || updatedProject.supervisorConfig?.password || ''
+      password: updatedData.password ? bcrypt.hashSync(updatedData.password, 10) : updatedProject.supervisorConfig?.password || ''
     };
     
     // 删除扁平字段，避免重复
@@ -275,8 +279,8 @@ function deleteProject(projectId) {
 }
 
 // 创建新用户
-function createUser(username, password, roleId = 2) {
-  const users = getAllUsers();
+async function createUser(username, password, roleId = 2, createdBy = null) {
+  const users = await getAllUsers();
   
   // 检查用户名是否已存在
   if (users.some(user => user.username === username)) {
@@ -290,7 +294,8 @@ function createUser(username, password, roleId = 2) {
     id: newId,
     username,
     password,
-    roleId
+    roleId,
+    createdBy
   };
   
   users.push(newUser);
@@ -303,8 +308,8 @@ function createUser(username, password, roleId = 2) {
 }
 
 // 删除用户
-function deleteUser(userId) {
-  let users = getAllUsers();
+async function deleteUser(userId) {
+  let users = await getAllUsers();
   
   // 检查用户是否存在
   const userIndex = users.findIndex(user => user.id === userId);
@@ -334,8 +339,8 @@ function deleteUser(userId) {
 }
 
 // 更新用户角色
-function updateUserRole(userId, roleId) {
-  const users = getAllUsers();
+async function updateUserRole(userId, roleId) {
+  const users = await getAllUsers();
   const userIndex = users.findIndex(user => user.id === userId);
   
   if (userIndex === -1) {
@@ -351,10 +356,29 @@ function updateUserRole(userId, roleId) {
   return writeJsonFile(USERS_FILE, users);
 }
 
+// 更新用户的上级管理员
+async function updateUserCreatedBy(userId, createdBy) {
+  const users = await getAllUsers();
+  const userIndex = users.findIndex(user => user.id === userId);
+  
+  if (userIndex === -1) {
+    return false;
+  }
+  
+  // 不能修改admin用户的信息
+  if (users[userIndex].username === 'admin') {
+    return false;
+  }
+  
+  users[userIndex].createdBy = createdBy;
+  return writeJsonFile(USERS_FILE, users);
+}
+
 // 为用户添加项目权限
-function addUserProjectPermission(userId, projectId) {
+async function addUserProjectPermission(userId, projectId) {
   // 检查用户是否为admin
-  const user = getAllUsers().find(u => u.id === userId);
+  const users = await getAllUsers();
+  const user = users.find(u => u.id === userId);
   if (user && user.username === 'admin') {
     return true; // admin用户默认拥有所有权限，无需添加
   }
@@ -375,9 +399,10 @@ function addUserProjectPermission(userId, projectId) {
 }
 
 // 移除用户的项目权限
-function removeUserProjectPermission(userId, projectId) {
+async function removeUserProjectPermission(userId, projectId) {
   // 检查用户是否为admin
-  const user = getAllUsers().find(u => u.id === userId);
+  const users = await getAllUsers();
+  const user = users.find(u => u.id === userId);
   if (user && user.username === 'admin') {
     return true; // admin用户默认拥有所有权限，不可移除
   }
@@ -428,14 +453,15 @@ function removeUserProgramPermission(userId, programId) {
 }
 
 // 根据ID获取用户
-function getUserById(userId) {
-  const users = getAllUsers();
-  return users.find(user => user.id === userId);
+async function getUserById(userId) {
+  const users = await getAllUsers();
+  const id = parseInt(userId);
+  return users.find(user => user.id === id);
 }
 
 // 修改用户密码
-function updateUserPassword(userId, newPassword) {
-  const users = getAllUsers();
+async function updateUserPassword(userId, newPassword) {
+  const users = await getAllUsers();
   const userIndex = users.findIndex(user => user.id === userId);
   
   if (userIndex === -1) {
@@ -465,6 +491,7 @@ module.exports = {
   createUser,
   deleteUser,
   updateUserRole,
+  updateUserCreatedBy,
   addUserProjectPermission,
   removeUserProjectPermission,
   addUserProgramPermission,

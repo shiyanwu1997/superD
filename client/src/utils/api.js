@@ -1,14 +1,29 @@
 import axios from 'axios';
-import { API_CONFIG } from '../config';
 
 // 创建axios实例
 const api = axios.create({
-  baseURL: API_CONFIG.BASE_URL,
-  timeout: API_CONFIG.TIMEOUT,
+  baseURL: 'http://localhost:3000/api',
+  timeout: 10000,
   withCredentials: true, // 允许携带cookie
   headers: {
     'Content-Type': 'application/json'
   }
+});
+
+// 请求拦截器：添加认证令牌
+api.interceptors.request.use(config => {
+  // 从localStorage获取令牌（如果存在）
+  const token = localStorage.getItem('token');
+  
+  // 如果令牌存在，添加到请求头
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  
+  return config;
+}, error => {
+  // 处理请求错误
+  return Promise.reject(error);
 });
 
 // 登录请求
@@ -127,8 +142,8 @@ export const getAllUsers = async () => {
 };
 
 // 创建新用户
-export const createUser = async (username, password, roleId) => {
-  const response = await api.post('/users', { username, password, roleId });
+export const createUser = async (username, password, roleId, createdBy) => {
+  const response = await api.post('/users', { username, password, roleId, createdBy });
   return response.data;
 };
 
@@ -141,6 +156,12 @@ export const deleteUser = async (userId) => {
 // 更新用户角色
 export const updateUserRole = async (userId, roleId) => {
   const response = await api.put(`/users/${userId}/role`, { roleId });
+  return response.data;
+};
+
+// 更新用户的上级管理员
+export const updateUserCreatedBy = async (userId, createdBy) => {
+  const response = await api.put(`/users/${userId}/createdBy`, { createdBy });
   return response.data;
 };
 

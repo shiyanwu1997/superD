@@ -24,6 +24,7 @@ export const AuthProvider = ({ children }) => {
       }
       
       // 登录成功后获取用户信息
+      localStorage.setItem('token', loginResponse.token); // 保存令牌到localStorage
       const userInfo = await getUserInfo();
       console.log('getUserInfo successful:', userInfo);
       setUser(userInfo);
@@ -44,6 +45,7 @@ export const AuthProvider = ({ children }) => {
   // 退出登录
   const logout = () => {
     setUser(null);
+    localStorage.removeItem('token'); // 清除令牌
     navigate('/login');
   };
 
@@ -55,7 +57,8 @@ export const AuthProvider = ({ children }) => {
         setUser(userInfo);
       } catch (error) {
         console.error('checkLoginStatus error:', error);
-        // 用户未登录或会话已过期
+        // 用户未登录或会话已过期，清除令牌
+        localStorage.removeItem('token');
         setUser(null);
       } finally {
         setLoading(false);

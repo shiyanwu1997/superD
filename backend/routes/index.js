@@ -507,32 +507,45 @@ router.get('/api/users', authMiddleware.verifyToken, async (req, res) => {
   let users = [];
   
   // 根据用户角色决定返回的用户列表
-  if (currentUser.roleId !== 1) {
-    // 普通用户，不能查看任何用户信息
-    return res.json([]);
-  } else if (currentUser.username === 'admin') {
-    // admin用户，查看所有用户
+  if (currentUser.roleId === 1) {
+    // admin角色（超级管理员），查看所有用户
     users = await db.getAllUsers();
-  } else {
-    // 普通管理员，只能查看自己创建的用户
+  } else if (currentUser.roleId === 2) {
+    // 普通管理员角色，只能查看自己和自己创建的用户
     const allUsers = await db.getAllUsers();
-    users = allUsers.filter(user => user.createdBy === currentUserId);
+    users = allUsers.filter(user => {
+      // 只能看到自己或自己创建的用户
+      return user.id === currentUserId || 
+             (user.createdBy !== null && user.createdBy === currentUserId);
+    });
+  } else {
+    // 普通用户/开发者角色，不能查看任何用户信息
+    return res.status(403).json({ error: '没有权限访问用户列表' });
   }
   
   const roles = await db.getAllRoles();
   const userProjectPermissions = await db.getAllUserProjectPermissions();
   
-  // 为每个用户添加角色信息和项目权限
+  // 为每个用户添加角色信息、项目权限和上级管理员用户名
   const usersWithRoles = users.map(user => {
     const role = roles.find(r => r.id === user.roleId);
     // 获取用户的项目权限
     const permissions = userProjectPermissions
       .filter(perm => perm.userId === user.id)
       .map(perm => ({ projectId: perm.projectId }));
+    // 获取上级管理员用户名
+    let createdByUsername = null;
+    if (user.createdBy) {
+      const admin = users.find(u => u.id === user.createdBy);
+      if (admin) {
+        createdByUsername = admin.username;
+      }
+    }
     return {
       ...user,
       roleName: role ? role.name : '未知角色',
-      projectPermissions: permissions
+      projectPermissions: permissions,
+      createdByUsername: createdByUsername
     };
   });
   
@@ -547,13 +560,32 @@ router.post('/api/users', authMiddleware.verifyToken, authMiddleware.checkAdmin,
     return res.status(400).json({ error: '用户名和密码不能为空' });
   }
   
-  // 获取当前管理员用户ID
+  // 获取当前管理员用户ID和角色
   const currentUserId = req.session.user?.id || req.user.userId;
+  const currentUser = await db.getUserById(currentUserId);
+  
+  // 限制普通管理员只能创建普通用户（roleId=3）
+  if (currentUser.roleId === 2) {
+    if (roleId !== 3) {
+      return res.status(403).json({ error: '普通管理员只能创建普通用户' });
+    }
+  }
   
   // 使用bcrypt加密密码
   const hashedPassword = await bcrypt.hash(password, 10);
   
-  const newUser = await db.createUser(username, hashedPassword, roleId, currentUserId);
+  // 对于超级管理员，可以指定createdBy；对于普通管理员，只能使用自己作为createdBy
+  let createdBy = currentUserId;
+  if (currentUser.roleId === 1 && req.body.createdBy) {
+    createdBy = parseInt(req.body.createdBy);
+    // 验证指定的createdBy是否为有效的普通管理员
+    const parentAdmin = await db.getUserById(createdBy);
+    if (!parentAdmin || parentAdmin.roleId !== 2) {
+      return res.status(400).json({ error: '指定的上级管理员无效' });
+    }
+  }
+  
+  const newUser = await db.createUser(username, hashedPassword, roleId, createdBy);
   
   if (newUser) {
     res.json({ success: true, message: '用户创建成功', user: newUser });
@@ -569,6 +601,19 @@ router.delete('/api/users/:userId', authMiddleware.verifyToken, authMiddleware.c
   
   if (isNaN(userIdInt)) {
     return res.status(400).json({ error: '无效的用户ID' });
+  }
+  
+  // 获取当前管理员用户ID和角色
+  const currentUserId = req.session.user?.id || req.user.userId;
+  const currentUser = await db.getUserById(currentUserId);
+  
+  // 获取被删除用户的信息
+  const targetUser = await db.getUserById(userIdInt);
+  
+  // 检查权限：admin可以删除任何用户，普通管理员只能删除自己或自己创建的用户
+  if (currentUser.roleId !== 1 && 
+      (targetUser.id !== currentUserId && targetUser.createdBy !== currentUserId)) {
+    return res.status(403).json({ error: '没有权限删除该用户' });
   }
   
   if (await db.deleteUser(userIdInt)) {
@@ -589,10 +634,94 @@ router.put('/api/users/:userId/role', authMiddleware.verifyToken, authMiddleware
     return res.status(400).json({ error: '无效的用户ID或角色ID' });
   }
   
+  // 获取当前管理员用户ID和角色
+  const currentUserId = req.session.user?.id || req.user.userId;
+  const currentUser = await db.getUserById(currentUserId);
+  
+  // 获取被操作用户的信息
+  const targetUser = await db.getUserById(userIdInt);
+  
+  // 检查权限：admin可以操作任何用户，普通管理员只能操作自己或自己创建的用户
+  if (currentUser.roleId !== 1 && 
+      (targetUser.id !== currentUserId && targetUser.createdBy !== currentUserId)) {
+    return res.status(403).json({ error: '没有权限修改该用户的角色' });
+  }
+  
+  // 限制普通管理员只能将用户角色在开发者（3）和普通管理员（2）之间转换
+  if (currentUser.roleId === 2) {
+    if (roleIdInt === 1) {
+      return res.status(403).json({ error: '普通管理员不能创建超级管理员' });
+    }
+  }
+  
+  // 当超级管理员将普通用户转换为普通管理员时，设置createdBy为超级管理员ID
+  if (currentUser.roleId === 1 && targetUser.roleId === 3 && roleIdInt === 2) {
+    // 执行角色更新，并同时更新createdBy
+    const users = await db.getAllUsers();
+    const userIndex = users.findIndex(user => user.id === userIdInt);
+    if (userIndex !== -1) {
+      users[userIndex].roleId = roleIdInt;
+      users[userIndex].createdBy = currentUserId;
+      if (await db.writeJsonFile(db.USERS_FILE, users)) {
+        res.json({ success: true, message: '用户角色更新成功' });
+        return;
+      } else {
+        res.status(500).json({ error: '用户角色更新失败' });
+        return;
+      }
+    }
+  }
+  
+  // 执行普通角色更新
   if (await db.updateUserRole(userIdInt, roleIdInt)) {
     res.json({ success: true, message: '用户角色更新成功' });
   } else {
     res.status(404).json({ error: '用户不存在' });
+  }
+});
+
+// API: 更新用户的上级管理员（仅超级管理员）
+router.put('/api/users/:userId/createdBy', authMiddleware.verifyToken, authMiddleware.checkAdmin, async (req, res) => {
+  const { userId } = req.params;
+  const { createdBy } = req.body;
+  const userIdInt = parseInt(userId);
+  const createdByInt = parseInt(createdBy);
+  
+  if (isNaN(userIdInt) || isNaN(createdByInt)) {
+    return res.status(400).json({ error: '无效的用户ID或上级管理员ID' });
+  }
+  
+  // 获取当前管理员用户ID和角色
+  const currentUserId = req.session.user?.id || req.user.userId;
+  const currentUser = await db.getUserById(currentUserId);
+  
+  // 只有超级管理员可以修改用户的上级管理员
+  if (currentUser.roleId !== 1) {
+    return res.status(403).json({ error: '只有超级管理员可以修改用户的上级管理员' });
+  }
+  
+  // 检查被操作用户是否存在
+  const targetUser = await db.getUserById(userIdInt);
+  if (!targetUser) {
+    return res.status(404).json({ error: '用户不存在' });
+  }
+  
+  // 检查被操作用户是否为普通用户
+  if (targetUser.roleId !== 3) {
+    return res.status(400).json({ error: '只有普通用户可以设置上级管理员' });
+  }
+  
+  // 检查指定的上级管理员是否存在且为普通管理员
+  const parentAdmin = await db.getUserById(createdByInt);
+  if (!parentAdmin || parentAdmin.roleId !== 2) {
+    return res.status(400).json({ error: '指定的上级管理员无效' });
+  }
+  
+  // 执行更新
+  if (await db.updateUserCreatedBy(userIdInt, createdByInt)) {
+    res.json({ success: true, message: '用户上级管理员更新成功' });
+  } else {
+    res.status(500).json({ error: '用户上级管理员更新失败' });
   }
 });
 
@@ -629,6 +758,19 @@ router.put('/api/users/:userId/password', authMiddleware.verifyToken, authMiddle
     return res.status(400).json({ error: '无效的用户ID或密码' });
   }
   
+  // 获取当前管理员用户ID和角色
+  const currentUserId = req.session.user?.id || req.user.userId;
+  const currentUser = await db.getUserById(currentUserId);
+  
+  // 获取被操作用户的信息
+  const targetUser = await db.getUserById(userIdInt);
+  
+  // 检查权限：admin可以操作任何用户，普通管理员只能操作自己或自己创建的用户
+  if (currentUser.roleId !== 1 && 
+      (targetUser.id !== currentUserId && targetUser.createdBy !== currentUserId)) {
+    return res.status(403).json({ error: '没有权限修改该用户的密码' });
+  }
+  
   // 使用bcrypt加密密码
   const hashedPassword = await bcrypt.hash(newPassword, 10);
   if (await db.updateUserPassword(userIdInt, hashedPassword)) {
@@ -653,9 +795,20 @@ router.get('/api/users/:userId/project-permissions', authMiddleware.verifyToken,
     return res.status(400).json({ error: '无效的用户ID' });
   }
   
-  // 检查当前用户是否为管理员或要查询的用户本人
+  // 获取当前用户和被查询用户的信息
   const currentUserId = req.session.user?.id || req.user.userId;
-  if (currentUserId !== userIdInt && req.user.roleId !== 1) {
+  const currentUser = await db.getUserById(currentUserId);
+  const targetUser = await db.getUserById(userIdInt);
+  
+  // 检查权限：
+  // 1. 用户本人可以查看自己的权限
+  // 2. admin可以查看任何用户的权限
+  // 3. 普通管理员只能查看自己或自己创建的用户的权限
+  if (currentUserId !== userIdInt && currentUser.roleId !== 1) {
+    if (currentUser.roleId === 2 && 
+        (targetUser.id !== currentUserId && targetUser.createdBy !== currentUserId)) {
+      return res.status(403).json({ error: '没有权限访问此资源' });
+    }
     return res.status(403).json({ error: '没有权限访问此资源' });
   }
   
@@ -677,10 +830,20 @@ router.post('/api/users/:userId/project-permissions', authMiddleware.verifyToken
     return res.status(400).json({ error: '无效的用户ID或项目ID' });
   }
   
+  // 获取当前管理员用户ID和角色
+  const currentUserId = req.session.user?.id || req.user.userId;
+  const currentUser = await db.getUserById(currentUserId);
+  
   // 检查被操作的用户是否为admin
-  const user = await db.getUserById(userIdInt);
-  if (user && user.username === 'admin') {
+  const targetUser = await db.getUserById(userIdInt);
+  if (targetUser && targetUser.username === 'admin') {
     return res.status(403).json({ error: 'admin用户的项目权限不可修改' });
+  }
+  
+  // 检查权限：admin可以操作任何用户，普通管理员只能操作自己或自己创建的用户
+  if (currentUser.roleId !== 1 && 
+      (targetUser.id !== currentUserId && targetUser.createdBy !== currentUserId)) {
+    return res.status(403).json({ error: '没有权限为该用户添加项目权限' });
   }
   
   if (await db.addUserProjectPermission(userIdInt, projectIdInt)) {
@@ -700,10 +863,20 @@ router.delete('/api/users/:userId/project-permissions/:projectId', authMiddlewar
     return res.status(400).json({ error: '无效的用户ID或项目ID' });
   }
   
+  // 获取当前管理员用户ID和角色
+  const currentUserId = req.session.user?.id || req.user.userId;
+  const currentUser = await db.getUserById(currentUserId);
+  
   // 检查被操作的用户是否为admin
-  const user = await db.getUserById(userIdInt);
-  if (user && user.username === 'admin') {
+  const targetUser = await db.getUserById(userIdInt);
+  if (targetUser && targetUser.username === 'admin') {
     return res.status(403).json({ error: 'admin用户的项目权限不可修改' });
+  }
+  
+  // 检查权限：admin可以操作任何用户，普通管理员只能操作自己或自己创建的用户
+  if (currentUser.roleId !== 1 && 
+      (targetUser.id !== currentUserId && targetUser.createdBy !== currentUserId)) {
+    return res.status(403).json({ error: '没有权限移除该用户的项目权限' });
   }
   
   if (await db.removeUserProjectPermission(userIdInt, projectIdInt)) {

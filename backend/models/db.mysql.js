@@ -15,6 +15,13 @@ const pool = mysql.createPool({
   queueLimit: 0
 });
 
+// 测试MySQL连接
+const testConnection = async () => {
+  const connection = await pool.getConnection();
+  await connection.query('SELECT 1');
+  connection.release();
+};
+
 // 获取所有角色
 const getAllRoles = async () => {
   const [rows] = await pool.query('SELECT * FROM roles');
@@ -248,7 +255,18 @@ async function updateProject(projectId, updatedData) {
   // 处理supervisorConfig字段
   if (updatedData.host || updatedData.port || updatedData.username || updatedData.password) {
     // 确保supervisorConfig对象存在
-    const currentConfig = JSON.parse(existingRows[0].supervisorConfig || '{}');
+    let currentConfig;
+    try {
+      // 检查supervisorConfig是否已经是一个对象
+      if (typeof existingRows[0].supervisorConfig === 'object') {
+        currentConfig = existingRows[0].supervisorConfig;
+      } else {
+        currentConfig = JSON.parse(existingRows[0].supervisorConfig || '{}');
+      }
+    } catch (e) {
+      // 如果解析失败，使用空对象
+      currentConfig = {};
+    }
     const newConfig = {
       host: updatedData.host || currentConfig.host || '',
       port: updatedData.port || updatedData.port === 0 ? updatedData.port : currentConfig.port || 0,
@@ -327,9 +345,13 @@ async function createUser(username, password, roleId = 2, createdBy = null) {
     id: newId,
     username,
     password,
-    roleId,
-    createdBy
+    roleId
   };
+  
+  // 只有当createdBy不为null时才添加到新用户对象中
+  if (createdBy !== null) {
+    newUser.createdBy = createdBy;
+  }
   
   await pool.query('INSERT INTO users SET ?', newUser);
   return newUser;
@@ -386,7 +408,37 @@ async function updateUserRole(userId, roleId) {
     return false;
   }
   
-  await pool.query('UPDATE users SET roleId = ? WHERE id = ?', [roleId, userId]);
+  // 获取admin用户的信息
+  const [adminRows] = await pool.query('SELECT * FROM users WHERE username = ?', ['admin']);
+  const adminId = adminRows.length > 0 ? adminRows[0].id : 1; // 默认admin ID为1
+  
+  // 如果用户从普通用户转换为管理员(roleId=2或roleId=1)，将createdBy设置为admin的ID
+  const currentRole = existingRows[0].roleId;
+  const isPromotingToAdmin = (currentRole === 3 && (roleId === 2 || roleId === 1));
+  
+  if (isPromotingToAdmin) {
+    await pool.query('UPDATE users SET roleId = ?, createdBy = ? WHERE id = ?', [roleId, adminId, userId]);
+  } else {
+    await pool.query('UPDATE users SET roleId = ? WHERE id = ?', [roleId, userId]);
+  }
+  
+  return true;
+}
+
+// 更新用户的上级管理员
+async function updateUserCreatedBy(userId, createdBy) {
+  // 检查用户是否存在
+  const [existingRows] = await pool.query('SELECT * FROM users WHERE id = ?', [userId]);
+  if (existingRows.length === 0) {
+    return false;
+  }
+  
+  // 不能修改admin用户的信息
+  if (existingRows[0].username === 'admin') {
+    return false;
+  }
+  
+  await pool.query('UPDATE users SET createdBy = ? WHERE id = ?', [createdBy, userId]);
   return true;
 }
 
@@ -485,8 +537,10 @@ module.exports = {
   updateProject,
   deleteProject,
   createUser,
+  testConnection,
   deleteUser,
   updateUserRole,
+  updateUserCreatedBy,
   addUserProjectPermission,
   removeUserProjectPermission,
   addUserProgramPermission,

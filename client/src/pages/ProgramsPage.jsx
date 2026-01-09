@@ -1,924 +1,426 @@
-import React, { useState, useEffect, useRef } from 'react';
-import axios from 'axios';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useMemo } from 'react';
+import { 
+  Layout, Menu, Table, Button, Tag, Space, message, 
+  Card, Row, Col, Statistic, Empty, Badge, 
+  Typography, Input, Dropdown, Avatar, Tooltip
+} from 'antd';
+import { 
+  AppstoreOutlined, SettingOutlined, LogoutOutlined, UserOutlined, 
+  PlayCircleOutlined, PauseCircleOutlined, ReloadOutlined, 
+  FileTextOutlined, ClusterOutlined, CheckCircleOutlined, 
+  CloseCircleOutlined, ExclamationCircleOutlined, SearchOutlined,
+  MenuFoldOutlined, MenuUnfoldOutlined
+} from '@ant-design/icons';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { getProgramsByProject, startProgram, stopProgram, restartProgram, getProjects, startAllPrograms, stopAllPrograms, restartAllPrograms, changeOwnPassword, createProject, updateProject, deleteProject } from '../utils/api';
+import { 
+  getProgramsByProject, startProgram, stopProgram, restartProgram, 
+  getProjects, startAllPrograms, stopAllPrograms, restartAllPrograms
+} from '../utils/api';
+
+// 引入子组件
 import UsersPage from './UsersPage';
-import ProgramDetailPage from './ProgramDetailPage';
+import ProgramDetailPage from './ProgramDetailPage'; // 日志详情抽屉
+import ProjectManageModal from '../components/modals/ProjectManageModal'; // 建议新建此组件，见下文
+import ChangePasswordModal from '../components/modals/ChangePasswordModal'; // 建议新建此组件
+
+const { Header, Sider, Content } = Layout;
+const { Title, Text } = Typography;
 
 const ProgramsPage = () => {
   const { projectId } = useParams();
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
+  
+  // --- 状态管理 ---
+  const [collapsed, setCollapsed] = useState(false);
   const [programs, setPrograms] = useState([]);
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingProjects, setLoadingProjects] = useState(true);
-  const [message, setMessage] = useState('');
-  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
-  const [oldPassword, setOldPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [passwordMessage, setPasswordMessage] = useState('');
-
-  const [editingProject, setEditingProject] = useState(null);
-  const [projectName, setProjectName] = useState('');
-  const [projectDescription, setProjectDescription] = useState('');
-  const [projectHost, setProjectHost] = useState('');
-  const [projectPort, setProjectPort] = useState('');
-  const [projectUsername, setProjectUsername] = useState('');
-  const [projectPassword, setProjectPassword] = useState('');
-  const [createProjectMessage, setCreateProjectMessage] = useState('');
-  const [editProjectMessage, setEditProjectMessage] = useState('');
-  const [showProjectManageModal, setShowProjectManageModal] = useState(false);
-  const [activeTab, setActiveTab] = useState('list'); // 'list', 'add', 'edit'
-  const [showUsersModal, setShowUsersModal] = useState(false);
-  const [showProgramDetailModal, setShowProgramDetailModal] = useState(false);
-  const [selectedProgramId, setSelectedProgramId] = useState(null);
-  const { user, logout } = useAuth();
-  const navigate = useNavigate();
+  const [searchText, setSearchText] = useState('');
   
-  // 请求取消token引用，用于取消未完成的请求
-  const cancelTokenRef = useRef(null);
+  // 操作Loading状态
+  const [actionLoading, setActionLoading] = useState({}); 
 
-  // 获取项目下的程序列表
-  useEffect(() => {
-    const fetchPrograms = async () => {
-      // 只有当projectId存在时才获取程序列表
-      if (!projectId) {
-        return;
-      }
-      
-      // 取消之前未完成的请求
-      if (cancelTokenRef.current) {
-        cancelTokenRef.current.cancel('取消旧请求，准备发起新请求');
-      }
-      
-      // 创建新的取消token
-      const source = axios.CancelToken.source();
-      cancelTokenRef.current = source;
-      
-      try {
-        setLoading(true);
-        // 切换项目时立即重置所有相关状态，确保没有旧消息残留
-        setPrograms([]);
-        setMessage('');
-        console.log(`开始获取项目 ${projectId} 的程序列表`);
-        const data = await getProgramsByProject(projectId, { cancelToken: source.token });
-        console.log(`获取项目 ${projectId} 的程序列表成功:`, data);
-        setPrograms(data);
-      } catch (err) {
-        // 如果是用户取消请求，不显示错误消息
-        if (axios.isCancel(err)) {
-          console.log(`请求被取消: ${err.message}`);
-          return;
-        }
-        
-        console.error(`获取项目 ${projectId} 的程序列表失败:`, err);
-        // 显示具体的错误信息，而不仅仅是通用消息
-        // 确保错误信息不重复
-        let errorMsg = err.response?.data?.error || err.message || '获取程序列表失败';
-        // 如果错误信息已经包含前缀，不再重复添加
-        if (errorMsg.startsWith('获取程序列表失败:')) {
-          errorMsg = errorMsg.replace('获取程序列表失败:', '');
-        }
-        setMessage(errorMsg);
-        // 出错时确保程序列表为空
-        setPrograms([]);
-      } finally {
-        setLoading(false);
-      }
+  // 模态框控制
+  const [showUsersModal, setShowUsersModal] = useState(false);
+  const [showLogDrawer, setShowLogDrawer] = useState(false);
+  const [showProjectModal, setShowProjectModal] = useState(false);
+  const [showPwdModal, setShowPwdModal] = useState(false);
+  const [selectedProgramId, setSelectedProgramId] = useState(null);
+
+  // --- 数据统计 (Computed) ---
+  const stats = useMemo(() => {
+    return {
+      total: programs.length,
+      running: programs.filter(p => p.status === 'RUNNING').length,
+      stopped: programs.filter(p => p.status === 'STOPPED').length,
+      error: programs.filter(p => ['FATAL', 'BACKOFF', 'UNKNOWN'].includes(p.status)).length
     };
+  }, [programs]);
 
-    fetchPrograms();
-    
-    // 组件卸载时取消请求
-    return () => {
-      if (cancelTokenRef.current) {
-        cancelTokenRef.current.cancel('组件卸载，取消请求');
-      }
-    };
-  }, [projectId]);
+  // 搜索过滤
+  const filteredPrograms = useMemo(() => {
+    if (!searchText) return programs;
+    return programs.filter(p => p.name.toLowerCase().includes(searchText.toLowerCase()));
+  }, [programs, searchText]);
 
-  // 获取用户可访问的项目列表
-  useEffect(() => {
-    const fetchProjects = async () => {
-      try {
-        setLoadingProjects(true);
-        const data = await getProjects();
-        setProjects(data);
-      } catch (err) {
-        console.error(err);
-        setMessage('获取项目列表失败');
-      } finally {
-        setLoadingProjects(false);
-      }
-    };
+  // --- API 交互 ---
 
-    fetchProjects();
-  }, [projectId]);
-
-
-
-  // 默认选择第一个项目
-  useEffect(() => {
-    if (!loadingProjects && projects.length > 0) {
-      // 如果没有projectId或者projectId不存在于用户的项目列表中
-      if (!projectId || !projects.some(p => p.id === parseInt(projectId))) {
-        navigate(`/programs/${projects[0].id}`);
-      }
-    }
-  }, [projects, loadingProjects, projectId, navigate]);
-
-
-
-  // 处理程序操作
-  const handleProgramAction = async (programId, action) => {
+  const fetchProjects = async () => {
     try {
-      let response;
-      switch (action) {
-        case 'start':
-          response = await startProgram(programId);
-          break;
-        case 'stop':
-          response = await stopProgram(programId);
-          break;
-        case 'restart':
-          response = await restartProgram(programId);
-          break;
-        default:
-          return;
-      }
+      setLoadingProjects(true);
+      const data = await getProjects();
+      setProjects(data);
+    } catch {
+      message.error('获取项目列表失败');
+    } finally {
+      setLoadingProjects(false);
+    }
+  };
 
-      if (response.success) {
-        setMessage(response.message);
-        // 刷新程序列表以获取最新状态
+  const fetchPrograms = async (pid) => {
+    if (!pid) return;
+    setLoading(true);
+    try {
+      const data = await getProgramsByProject(pid);
+      setPrograms(data);
+    } catch (err) {
+      // 切换项目失败时清空列表
+      setPrograms([]);
+      if (!err.message?.includes('cancel')) {
+        message.error(err.response?.data?.error || '获取程序列表失败');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 初始化
+  useEffect(() => { fetchProjects(); }, []);
+
+  // 项目切换逻辑
+  useEffect(() => {
+    if (projectId) {
+      fetchPrograms(projectId);
+    } else if (!loadingProjects && projects.length > 0) {
+      navigate(`/programs/${projects[0].id}`);
+    }
+  }, [projectId, projects, loadingProjects, navigate]);
+
+  // 自动轮询 (每5秒更新状态)
+  useEffect(() => {
+    if (!projectId) return;
+    const interval = setInterval(async () => {
+      // 如果正在操作或打开了日志，暂停轮询以防跳动
+      if (Object.keys(actionLoading).length > 0 || showLogDrawer) return;
+      try {
         const data = await getProgramsByProject(projectId);
         setPrograms(data);
-      } else {
-        setMessage(response.message || '操作失败');
-      }
-    } catch (err) {
-      console.error(err);
-      setMessage('操作失败');
-    }
+      } catch { /* ignore silent refresh errors */ }
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [projectId, actionLoading, showLogDrawer]);
 
-    // 3秒后清除消息
-    setTimeout(() => setMessage(''), 3000);
-  };
+  // --- 动作处理 ---
 
-  // 处理批量操作
-  const handleBatchAction = async (action) => {
+  const handleAction = async (id, action, name) => {
+    setActionLoading(prev => ({ ...prev, [id]: action }));
     try {
-      let response;
-      switch (action) {
-        case 'start-all':
-          response = await startAllPrograms(projectId);
-          break;
-        case 'stop-all':
-          response = await stopAllPrograms(projectId);
-          break;
-        case 'restart-all':
-          response = await restartAllPrograms(projectId);
-          break;
-        default:
-          return;
-      }
+      let res;
+      if (action === 'start') res = await startProgram(id);
+      if (action === 'stop') res = await stopProgram(id);
+      if (action === 'restart') res = await restartProgram(id);
 
-      if (response.success) {
-        setMessage(response.message);
-        // 刷新程序列表以获取最新状态
-        const data = await getProgramsByProject(projectId);
-        setPrograms(data);
+      if (res.success) {
+        message.success(`${name} 指令已发送`);
+        fetchPrograms(projectId); // 立即刷新
       } else {
-        setMessage(response.message || '批量操作失败');
+        message.error(res.message || '操作失败');
       }
-    } catch (err) {
-      console.error(err);
-      setMessage('批量操作失败');
-    }
-
-    // 3秒后清除消息
-    setTimeout(() => setMessage(''), 3000);
-  };
-
-  const handleChangePassword = async () => {
-    // 验证新密码和确认密码是否一致
-    if (newPassword !== confirmPassword) {
-      setPasswordMessage('新密码和确认密码不一致');
-      return;
-    }
-    
-    try {
-      const result = await changeOwnPassword(oldPassword, newPassword);
-      if (result.success) {
-        setPasswordMessage('密码修改成功');
-        // 重置表单并关闭模态框
-        setTimeout(() => {
-          setShowChangePasswordModal(false);
-          setOldPassword('');
-          setNewPassword('');
-          setConfirmPassword('');
-          setPasswordMessage('');
-        }, 1500);
-      } else {
-        setPasswordMessage(result.error || '密码修改失败');
-      }
-    } catch (err) {
-      console.error('密码修改失败:', err);
-      setPasswordMessage('密码修改失败: ' + (err.response?.data?.error || err.message));
+    } catch {
+      message.error('请求异常');
+    } finally {
+      setActionLoading(prev => ({ ...prev, [id]: null }));
     }
   };
 
-  const handleCreateProject = async () => {
-    // 验证必填字段
-    if (!projectName || !projectHost || !projectPort) {
-      setCreateProjectMessage('项目名称、主机和端口不能为空');
-      return;
-    }
-    
+  const handleBatch = async (action, name) => {
+    const hide = message.loading(`正在${name}所有程序...`, 0);
     try {
-      const projectData = {
-        name: projectName,
-        description: projectDescription,
-        host: projectHost,
-        port: projectPort,
-        username: projectUsername,
-        password: projectPassword
-      };
+      let res;
+      if (action === 'start') res = await startAllPrograms(projectId);
+      if (action === 'stop') res = await stopAllPrograms(projectId);
+      if (action === 'restart') res = await restartAllPrograms(projectId);
       
-      const result = await createProject(projectData);
-      if (result) {
-        setCreateProjectMessage('项目创建成功');
-        // 刷新项目列表
-        const data = await getProjects();
-        setProjects(data);
-        // 重置表单
-        setTimeout(() => {
-          setProjectName('');
-          setProjectDescription('');
-          setProjectHost('');
-          setProjectPort('');
-          setProjectUsername('');
-          setProjectPassword('');
-          setCreateProjectMessage('');
-          setActiveTab('list');
-        }, 1500);
+      if (res?.success) {
+        hide();
+        message.success('批量操作成功');
+        fetchPrograms(projectId);
       } else {
-        setCreateProjectMessage('项目创建失败');
+        hide();
+        message.error('批量操作失败');
       }
-    } catch (err) {
-      console.error('项目创建失败:', err);
-      setCreateProjectMessage('项目创建失败: ' + (err.response?.data?.error || err.message));
+    } catch {
+      hide();
+      message.error('批量操作异常');
     }
   };
 
-  const handleEditProject = async () => {
-    // 验证必填字段
-    if (!projectName || !projectHost || !projectPort) {
-      setEditProjectMessage('项目名称、主机和端口不能为空');
-      return;
-    }
-    
-    try {
-      const projectData = {
-        name: projectName,
-        description: projectDescription,
-        host: projectHost,
-        port: projectPort,
-        username: projectUsername,
-        password: projectPassword
-      };
-      
-      const result = await updateProject(editingProject.id, projectData);
-      if (result) {
-        setEditProjectMessage('项目更新成功');
-        // 刷新项目列表
-        const data = await getProjects();
-        setProjects(data);
-        // 重置表单并切换到项目列表标签
-        setTimeout(() => {
-          setEditingProject(null);
-          setProjectName('');
-          setProjectDescription('');
-          setProjectHost('');
-          setProjectPort('');
-          setProjectUsername('');
-          setProjectPassword('');
-          setEditProjectMessage('');
-          setActiveTab('list');
-        }, 1500);
-      } else {
-        setEditProjectMessage('项目更新失败');
-      }
-    } catch (err) {
-      console.error('项目更新失败:', err);
-      setEditProjectMessage('项目更新失败: ' + (err.response?.data?.error || err.message));
-    }
-  };
+  // --- UI配置 ---
 
-  const handleDeleteProject = async (deletedProjectId) => {
-    try {
-      const result = await deleteProject(deletedProjectId);
-      if (result) {
-        setMessage('项目删除成功');
-        // 刷新项目列表
-        const data = await getProjects();
-        setProjects(data);
-        // 如果当前正在查看的项目被删除，则导航到第一个项目
-        if (data.length > 0 && parseInt(deletedProjectId) === parseInt(projectId)) {
-          navigate(`/programs/${data[0].id}`);
+  const columns = [
+    {
+        title: '状态',
+        dataIndex: 'status',
+        width: 120,
+        render: (status) => {
+          let color = 'default';
+          let icon = null;
+          if (status === 'RUNNING') { color = 'success'; icon = <CheckCircleOutlined />; }
+          else if (status === 'STOPPED') { color = 'error'; icon = <PauseCircleOutlined />; }
+          else if (status === 'STARTING') { color = 'processing'; icon = <ReloadOutlined spin />; }
+          else { color = 'warning'; icon = <ExclamationCircleOutlined />; }
+          return <Tag icon={icon} color={color}>{status}</Tag>;
         }
-      } else {
-        setMessage('项目删除失败');
+      },
+    {
+      title: '程序名称',
+      dataIndex: 'name',
+      render: (text, record) => (
+        <div>
+          <Text strong style={{ fontSize: 15 }}>{text}</Text>
+          <div style={{ color: '#888', fontSize: 12 }}>{record.description || '暂无描述'}</div>
+        </div>
+      )
+    },
+    {
+      title: '操作',
+      key: 'action',
+      width: 280,
+      render: (_, record) => {
+        const loadingAction = actionLoading[record.id];
+        return (
+          <Space>
+            <Tooltip title="启动">
+              <Button 
+                type="text" 
+                shape="circle" 
+                icon={<PlayCircleOutlined />} 
+                style={{ color: record.status === 'RUNNING' ? '#d9d9d9' : '#52c41a' }}
+                disabled={record.status === 'RUNNING' || loadingAction}
+                loading={loadingAction === 'start'}
+                onClick={() => handleAction(record.id, 'start', '启动')}
+              />
+            </Tooltip>
+            <Tooltip title="停止">
+              <Button 
+                type="text" 
+                shape="circle" 
+                danger
+                icon={<PauseCircleOutlined />}
+                disabled={record.status === 'STOPPED' || loadingAction}
+                loading={loadingAction === 'stop'}
+                onClick={() => handleAction(record.id, 'stop', '停止')}
+              />
+            </Tooltip>
+            <Tooltip title="重启">
+              <Button 
+                type="text" 
+                shape="circle" 
+                style={{ color: '#1890ff' }}
+                icon={<ReloadOutlined />}
+                loading={loadingAction === 'restart'}
+                onClick={() => handleAction(record.id, 'restart', '重启')}
+              />
+            </Tooltip>
+            <Button 
+              size="small" 
+              icon={<FileTextOutlined />} 
+              onClick={() => {
+                setSelectedProgramId(record.id);
+                setShowLogDrawer(true);
+              }}
+            >
+              详情/日志
+            </Button>
+          </Space>
+        );
       }
-    } catch (err) {
-      console.error('项目删除失败:', err);
-      setMessage('项目删除失败: ' + (err.response?.data?.error || err.message));
     }
-    
-    // 3秒后清除消息
-    setTimeout(() => setMessage(''), 3000);
-  };
+  ];
 
-if (loading) {
-    return <div className="loading">加载中...</div>;
-  }
+  const userMenu = {
+    items: [
+      ...(user?.roleId === 1 || user?.roleId === 2 ? [{
+        key: 'users',
+        label: '用户管理',
+        icon: <UserOutlined />,
+        onClick: () => setShowUsersModal(true)
+      }] : []),
+      { key: 'pwd', label: '修改密码', icon: <SettingOutlined />, onClick: () => setShowPwdModal(true) },
+      { type: 'divider' },
+      { key: 'logout', label: '退出登录', icon: <LogoutOutlined />, danger: true, onClick: logout }
+    ]
+  };
 
   return (
-    <div className="app-container">
-      <header className="app-header">
-        <h1>Supervisor</h1>
-        <div className="user-info">
-          <div className="user-details">
-            <span>欢迎, {user?.username || ''}</span>
-            {user && user.roleId === 1 && (
-              <button 
-                className="nav-link-btn" 
-                onClick={() => setShowUsersModal(true)}
-              >
-                用户管理
-              </button>
-            )}
-            {user && user.roleId !== 1 && (
-              <button className="change-password-button" onClick={() => {
-                console.log('修改密码按钮被点击');
-                setShowChangePasswordModal(true);
-                console.log('showChangePasswordModal状态:', true);
-              }}>
-                修改密码
-              </button>
-            )}
-          </div>
-          <button className="logout-button" onClick={logout}>退出</button>
+    <Layout style={{ minHeight: '100vh' }}>
+      <Sider 
+        trigger={null} 
+        collapsible 
+        collapsed={collapsed} 
+        width={260} 
+        theme="light"
+        style={{ boxShadow: '2px 0 8px 0 rgba(29,35,41,.05)', zIndex: 10 }}
+      >
+        <div style={{ height: 64, display: 'flex', alignItems: 'center', justifyContent: 'center', borderBottom: '1px solid #f0f0f0' }}>
+          <ClusterOutlined style={{ fontSize: 24, color: '#1890ff' }} />
+          {!collapsed && <span style={{ marginLeft: 10, fontWeight: 'bold', fontSize: 18, color: '#001529' }}>SuperD</span>}
         </div>
-      </header>
-
-      <main className="main-content">
-        {/* 左侧项目选择栏 */}
-        <div className="project-sidebar">
-          <h2 className="sidebar-title">项目列表</h2>
-          <div className="project-actions">
-            {user && user.roleId === 1 && (
-              <button 
-                className="add-project-button"
-                onClick={() => setShowProjectManageModal(true)}
-              >
-                项目编辑
-              </button>
-            )}
-          </div>
-          {loadingProjects ? (
-            <div className="sidebar-loading">加载中...</div>
-          ) : (
-            <ul className="project-list">
-              {projects.map((project) => (
-                <li 
-                  key={project.id}
-                  className={`project-item ${project.id === parseInt(projectId) ? 'active' : ''}`}
-                  onClick={() => navigate(`/programs/${project.id}`)}
-                >
-                  <div className="project-header">
-                    <div className="project-name">{project.name}</div>
-                    <div className="project-controls">
-                      <div className="connection-status">
-                        <span className={`status-light ${project.connectionStatus?.connected ? 'success' : 'failure'}`}></span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="project-description">{project.description}</div>
-                </li>
-              ))}
-            </ul>
+        
+        <div style={{ padding: '16px 16px 8px', display: collapsed ? 'none' : 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Text type="secondary" style={{ fontSize: 12 }}>项目列表 ({projects.length})</Text>
+          {user?.roleId === 1 && (
+            <Tooltip title="管理项目">
+              <Button type="text" size="small" icon={<SettingOutlined />} onClick={() => setShowProjectModal(true)} />
+            </Tooltip>
           )}
         </div>
 
-        {/* 右侧程序列表 */}
-        <div className="programs-content">
-          <div className="page-header">
-            <h2>程序列表</h2>
-            <div className="batch-actions">
-              <button 
-                className="control-button start-all"
-                onClick={() => handleBatchAction('start-all')}
-              >
-                启动所有程序
-              </button>
-              <button 
-                className="control-button stop-all"
-                onClick={() => handleBatchAction('stop-all')}
-              >
-                停止所有程序
-              </button>
-              <button 
-                className="control-button restart-all"
-                onClick={() => handleBatchAction('restart-all')}
-              >
-                重启所有程序
-              </button>
-            </div>
-          </div>
+        <Menu
+          mode="inline"
+          selectedKeys={[projectId]}
+          style={{ borderRight: 0 }}
+          items={projects.map(p => ({
+            key: String(p.id),
+            icon: <Badge status={p.connectionStatus?.connected ? 'success' : 'error'} />,
+            label: p.name,
+            title: p.description,
+            onClick: () => navigate(`/programs/${p.id}`)
+          }))}
+        />
+      </Sider>
 
-          {message && (
-            <div className={`message ${message.includes('失败') || message.includes('无法连接') ? 'error-message' : 'success-message'}`}>
-              {message}
-            </div>
-          )}
+      <Layout>
+        <Header style={{ padding: '0 24px', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 1px 4px rgba(0,21,41,.08)', zIndex: 9 }}>
+          {React.createElement(collapsed ? MenuUnfoldOutlined : MenuFoldOutlined, {
+            className: 'trigger',
+            onClick: () => setCollapsed(!collapsed),
+            style: { fontSize: 18, cursor: 'pointer' }
+          })}
+          
+          <Dropdown menu={userMenu}>
+            <Space style={{ cursor: 'pointer' }}>
+              <Avatar style={{ backgroundColor: '#1890ff' }} icon={<UserOutlined />} />
+              <Text>{user?.username}</Text>
+            </Space>
+          </Dropdown>
+        </Header>
 
-          {loading ? (
-            <div className="loading">加载中...</div>
-          ) : (
-            <div className="programs-table-container">
-              <table className="programs-table">
-                <thead>
-                  <tr>
-                    <th>程序名称</th>
-                    <th>描述</th>
-                    <th>状态</th>
-                    <th>操作</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {programs.map((program) => (
-                    <tr key={program.id}>
-                      <td>{program.name}</td>
-                      <td>{program.description}</td>
-                      <td>
-                        <span className={`status-badge ${program.status.toLowerCase()}`}>
-                          {program.status}
-                        </span>
-                      </td>
-                      <td className="action-buttons">
-                        <button 
-                          className="detail-button"
-                          onClick={() => {
-                            setSelectedProgramId(program.id);
-                            setShowProgramDetailModal(true);
-                          }}
-                        >
-                          详情
-                        </button>
-                        <button 
-                          className="control-button start"
-                          onClick={() => handleProgramAction(program.id, 'start')}
-                        >
-                          启动
-                        </button>
-                        <button 
-                          className="control-button stop"
-                          onClick={() => handleProgramAction(program.id, 'stop')}
-                        >
-                          停止
-                        </button>
-                        <button 
-                          className="control-button restart"
-                          onClick={() => handleProgramAction(program.id, 'restart')}
-                        >
-                          重启
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        <Content style={{ margin: '24px', minHeight: 280 }}>
+          {projectId ? (
+            <>
+              {/* 顶部统计卡片 */}
+              <Row gutter={16} style={{ marginBottom: 24 }}>
+                <Col span={6}>
+                  <Card bordered={false} hoverable>
+                    <Statistic title="总程序数" value={stats.total} prefix={<AppstoreOutlined />} />
+                  </Card>
+                </Col>
+                <Col span={6}>
+                  <Card bordered={false} hoverable>
+                    <Statistic title="运行中" value={stats.running} valueStyle={{ color: '#3f8600' }} prefix={<CheckCircleOutlined />} />
+                  </Card>
+                </Col>
+                <Col span={6}>
+                  <Card bordered={false} hoverable>
+                    <Statistic title="已停止" value={stats.stopped} valueStyle={{ color: '#cf1322' }} prefix={<PauseCircleOutlined />} />
+                  </Card>
+                </Col>
+                <Col span={6}>
+                  <Card bordered={false} hoverable>
+                    <Statistic title="异常状态" value={stats.error} valueStyle={{ color: '#faad14' }} prefix={<ExclamationCircleOutlined />} />
+                  </Card>
+                </Col>
+              </Row>
 
-              {programs.length === 0 && (
-                <div className="no-programs">
-                  <div className="no-programs-icon">📋</div>
-                  <h3>暂无程序</h3>
-                  <p>该项目下没有可访问的Supervisor程序</p>
-                  <p className="no-programs-hint">请确保Supervisor已正确配置并运行</p>
+              {/* 主操作栏 */}
+              <Card bordered={false} style={{ marginBottom: 24 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
+                  <Space size="large">
+                    <Title level={4} style={{ margin: 0 }}>
+                      {projects.find(p => String(p.id) === projectId)?.name || '未命名项目'}
+                    </Title>
+                    <Input 
+                      placeholder="搜索程序..." 
+                      prefix={<SearchOutlined />} 
+                      allowClear
+                      onChange={e => setSearchText(e.target.value)} 
+                      style={{ width: 200 }} 
+                    />
+                  </Space>
+                  
+                  <Space>
+                    <Button onClick={() => fetchPrograms(projectId)} icon={<ReloadOutlined />}>刷新</Button>
+                    <Button onClick={() => handleBatch('start', '启动')} icon={<PlayCircleOutlined />}>全部启动</Button>
+                    <Button onClick={() => handleBatch('restart', '重启')} icon={<ReloadOutlined />}>全部重启</Button>
+                    <Button danger onClick={() => handleBatch('stop', '停止')} icon={<PauseCircleOutlined />}>全部停止</Button>
+                  </Space>
                 </div>
-              )}
+              </Card>
+
+              {/* 程序表格 */}
+              <Card bordered={false} bodyStyle={{ padding: 0 }}>
+                <Table
+                  columns={columns}
+                  dataSource={filteredPrograms}
+                  rowKey="id"
+                  loading={loading}
+                  pagination={false}
+                  locale={{ emptyText: <Empty description="暂无程序" image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
+                />
+              </Card>
+            </>
+          ) : (
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', flexDirection: 'column' }}>
+              <Empty description="请从左侧选择一个项目进行管理" />
             </div>
           )}
-        </div>
-      </main>
+        </Content>
+      </Layout>
 
-      {/* 密码修改模态框 */}
-      {showChangePasswordModal && (
-        <div className="modal-overlay">
-          <div className="modal-content">
-            <div className="modal-header">
-              <h3>修改密码</h3>
-              <button 
-                className="modal-close" 
-                onClick={() => {
-                  setShowChangePasswordModal(false);
-                  setOldPassword('');
-                  setNewPassword('');
-                  setConfirmPassword('');
-                  setPasswordMessage('');
-                }}
-              >
-                ×
-              </button>
-            </div>
-            
-            <div className="modal-body">
-              {passwordMessage && (
-                <div className={`password-message ${passwordMessage.includes('失败') || passwordMessage.includes('不一致') ? 'error' : 'success'}`}>
-                  {passwordMessage}
-                </div>
-              )}
-              
-              <div className="form-group">
-                <label>原密码</label>
-                <input 
-                  type="password" 
-                  value={oldPassword} 
-                  onChange={(e) => setOldPassword(e.target.value)}
-                  placeholder="请输入原密码"
-                  required
-                />
-              </div>
-              
-              <div className="form-group">
-                <label>新密码</label>
-                <input 
-                  type="password" 
-                  value={newPassword} 
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="请输入新密码"
-                  required
-                />
-              </div>
-              
-              <div className="form-group">
-                <label>确认新密码</label>
-                <input 
-                  type="password" 
-                  value={confirmPassword} 
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="请再次输入新密码"
-                  required
-                />
-              </div>
-            </div>
-            
-            <div className="modal-footer">
-              <button 
-                className="cancel-button" 
-                onClick={() => {
-                  setShowChangePasswordModal(false);
-                  setOldPassword('');
-                  setNewPassword('');
-                  setConfirmPassword('');
-                  setPasswordMessage('');
-                }}
-              >
-                取消
-              </button>
-              <button 
-                className="confirm-button" 
-                onClick={handleChangePassword}
-              >
-                确认修改
-              </button>
-            </div>
-          </div>
-        </div>
+      {/* 弹窗组件挂载区 */}
+      <UsersPage isOpen={showUsersModal} onClose={() => setShowUsersModal(false)} />
+      
+      <ProgramDetailPage 
+        isOpen={showLogDrawer} 
+        onClose={() => setShowLogDrawer(false)} 
+        programId={selectedProgramId} 
+      />
+      
+      {/* 这里你需要自己创建一个 ProjectManageModal 和 ChangePasswordModal 的 Antd 版本 
+         或者直接在这里使用 Antd Modal 重写逻辑。
+         为了保持代码整洁，建议将原 ProgramsPage 中的 密码/项目管理 逻辑抽离。
+      */}
+      {showProjectModal && (
+        <ProjectManageModal 
+          open={showProjectModal} 
+          onClose={() => setShowProjectModal(false)}
+          onRefresh={fetchProjects}
+          projects={projects}
+        />
       )}
 
-
-
-      {/* 项目管理模态框 */}
-      {showProjectManageModal && (
-        <div className="modal-overlay">
-          <div className="modal-content project-management-modal">
-            <div className="modal-header">
-              <h3>项目管理</h3>
-              <button 
-                className="modal-close" 
-                onClick={() => {
-                  setShowProjectManageModal(false);
-                  setActiveTab('list');
-                  setEditingProject(null);
-                  setProjectName('');
-                  setProjectDescription('');
-                  setProjectHost('');
-                  setProjectPort('');
-                  setProjectUsername('');
-                  setProjectPassword('');
-                  setCreateProjectMessage('');
-                  setEditProjectMessage('');
-                }}
-              >
-                ×
-              </button>
-            </div>
-            
-            <div className="modal-body">
-              {/* 标签切换 */}
-              <div className="modal-tabs">
-                <button 
-                  className={`tab-button ${activeTab === 'list' ? 'active' : ''}`}
-                  onClick={() => setActiveTab('list')}
-                >
-                  项目列表
-                </button>
-                <button 
-                  className={`tab-button ${activeTab === 'add' ? 'active' : ''}`}
-                  onClick={() => setActiveTab('add')}
-                >
-                  添加项目
-                </button>
-              </div>
-              
-              {/* 项目列表标签 */}
-              {activeTab === 'list' && (
-                <div className="project-list-tab">
-                  <table className="projects-table">
-                    <thead>
-                      <tr>
-                        <th>项目名称</th>
-                        <th>描述</th>
-                        <th>主机</th>
-                        <th>端口</th>
-                        <th>操作</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {projects.map((project) => (
-                        <tr key={project.id}>
-                          <td>{project.name}</td>
-                          <td>{project.description || '-'}</td>
-                          <td>{project.supervisorConfig?.host}</td>
-                          <td>{project.supervisorConfig?.port}</td>
-                          <td>
-                            <button 
-                              className="edit-button"
-                              onClick={() => {
-                                setEditingProject(project);
-                                setProjectName(project.name || '');
-                                setProjectDescription(project.description || '');
-                                setProjectHost(project.supervisorConfig?.host || '');
-                                setProjectPort((project.supervisorConfig?.port || '').toString());
-                                setProjectUsername(project.supervisorConfig?.username || '');
-                                setProjectPassword(project.supervisorConfig?.password || '');
-                                setActiveTab('edit');
-                              }}
-                            >
-                              编辑
-                            </button>
-                            <button 
-                              className="delete-button"
-                              onClick={() => {
-                                if (window.confirm(`确定要删除项目 ${project.name} 吗？`)) {
-                                  handleDeleteProject(project.id);
-                                }
-                              }}
-                            >
-                              删除
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-              
-              {/* 添加项目标签 */}
-              {activeTab === 'add' && (
-                <div className="add-project-tab">
-                  {createProjectMessage && (
-                    <div className={`create-project-message ${createProjectMessage.includes('失败') ? 'error' : 'success'}`}>
-                      {createProjectMessage}
-                    </div>
-                  )}
-                  
-                  <div className="form-group">
-                    <label>项目名称</label>
-                    <input 
-                      type="text" 
-                      value={projectName} 
-                      onChange={(e) => setProjectName(e.target.value)}
-                      placeholder="请输入项目名称"
-                      required
-                    />
-                  </div>
-                  
-                  <div className="form-group">
-                    <label>项目描述</label>
-                    <textarea 
-                      value={projectDescription} 
-                      onChange={(e) => setProjectDescription(e.target.value)}
-                      placeholder="请输入项目描述（可选）"
-                    />
-                  </div>
-                  
-                  <div className="form-group">
-                    <label>主机地址</label>
-                    <input 
-                      type="text" 
-                      value={projectHost} 
-                      onChange={(e) => setProjectHost(e.target.value)}
-                      placeholder="请输入主机地址"
-                      required
-                    />
-                  </div>
-                  
-                  <div className="form-group">
-                    <label>端口</label>
-                    <input 
-                      type="number" 
-                      value={projectPort} 
-                      onChange={(e) => setProjectPort(e.target.value)}
-                      placeholder="请输入端口"
-                      required
-                    />
-                  </div>
-                  
-                  <div className="form-group">
-                    <label>用户名（可选）</label>
-                    <input 
-                      type="text" 
-                      value={projectUsername} 
-                      onChange={(e) => setProjectUsername(e.target.value)}
-                      placeholder="请输入用户名"
-                    />
-                  </div>
-                  
-                  <div className="form-group">
-                    <label>密码（可选）</label>
-                    <input 
-                      type="password" 
-                      value={projectPassword} 
-                      onChange={(e) => setProjectPassword(e.target.value)}
-                      placeholder="请输入密码"
-                    />
-                  </div>
-                </div>
-              )}
-              
-              {/* 编辑项目标签 */}
-              {activeTab === 'edit' && editingProject && (
-                <div className="edit-project-tab">
-                  {editProjectMessage && (
-                    <div className={`edit-project-message ${editProjectMessage.includes('失败') ? 'error' : 'success'}`}>
-                      {editProjectMessage}
-                    </div>
-                  )}
-                  
-                  <div className="form-group">
-                    <label>项目名称</label>
-                    <input 
-                      type="text" 
-                      value={projectName} 
-                      onChange={(e) => setProjectName(e.target.value)}
-                      placeholder="请输入项目名称"
-                      required
-                    />
-                  </div>
-                  
-                  <div className="form-group">
-                    <label>项目描述</label>
-                    <textarea 
-                      value={projectDescription} 
-                      onChange={(e) => setProjectDescription(e.target.value)}
-                      placeholder="请输入项目描述（可选）"
-                    />
-                  </div>
-                  
-                  <div className="form-group">
-                    <label>主机地址</label>
-                    <input 
-                      type="text" 
-                      value={projectHost} 
-                      onChange={(e) => setProjectHost(e.target.value)}
-                      placeholder="请输入主机地址"
-                      required
-                    />
-                  </div>
-                  
-                  <div className="form-group">
-                    <label>端口</label>
-                    <input 
-                      type="number" 
-                      value={projectPort} 
-                      onChange={(e) => setProjectPort(e.target.value)}
-                      placeholder="请输入端口"
-                      required
-                    />
-                  </div>
-                  
-                  <div className="form-group">
-                    <label>用户名（可选）</label>
-                    <input 
-                      type="text" 
-                      value={projectUsername} 
-                      onChange={(e) => setProjectUsername(e.target.value)}
-                      placeholder="请输入用户名"
-                    />
-                  </div>
-                  
-                  <div className="form-group">
-                    <label>密码（可选）</label>
-                    <input 
-                      type="password" 
-                      value={projectPassword} 
-                      onChange={(e) => setProjectPassword(e.target.value)}
-                      placeholder="请输入密码"
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-            
-            <div className="modal-footer">
-              {activeTab === 'list' && (
-                <button 
-                  className="confirm-button" 
-                  onClick={() => setActiveTab('add')}
-                >
-                  添加项目
-                </button>
-              )}
-              
-              {activeTab === 'add' && (
-                <>
-                  <button 
-                    className="cancel-button" 
-                    onClick={() => setActiveTab('list')}
-                  >
-                    取消
-                  </button>
-                  <button 
-                    className="confirm-button" 
-                    onClick={handleCreateProject}
-                  >
-                    确认创建
-                  </button>
-                </>
-              )}
-              
-              {activeTab === 'edit' && (
-                <>
-                  <button 
-                    className="cancel-button" 
-                    onClick={() => {
-                      setActiveTab('list');
-                      setEditingProject(null);
-                      setProjectName('');
-                      setProjectDescription('');
-                      setProjectHost('');
-                      setProjectPort('');
-                      setProjectUsername('');
-                      setProjectPassword('');
-                      setEditProjectMessage('');
-                    }}
-                  >
-                    取消
-                  </button>
-                  <button 
-                    className="confirm-button" 
-                    onClick={() => {
-                      handleEditProject();
-                      setActiveTab('list');
-                    }}
-                  >
-                    确认更新
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
+      {showPwdModal && (
+        <ChangePasswordModal
+          open={showPwdModal}
+          onClose={() => setShowPwdModal(false)}
+        />
       )}
 
-      {/* 用户管理模态框 */}
-      <UsersPage
-        isOpen={showUsersModal}
-        onClose={() => setShowUsersModal(false)}
-      />
-
-      {/* 程序详情模态框 */}
-      <ProgramDetailPage
-        isOpen={showProgramDetailModal}
-        onClose={() => setShowProgramDetailModal(false)}
-        programId={selectedProgramId}
-      />
-
-    </div>
+    </Layout>
   );
 };
 
