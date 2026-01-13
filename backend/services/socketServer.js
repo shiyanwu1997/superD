@@ -31,14 +31,14 @@ class SocketServer {
     this.io.on('connection', (socket) => {
       console.log(`Socket connected: ${socket.id}`);
       this.connections.set(socket.id, {
-      socket: socket,
-      programId: null,
-      logType: null,
-      offset: null, // 初始化为null，确保获取当前日志文件大小作为初始偏移量
-      isInitialFetch: false, // 是否处于初始获取状态
-      emptyLogCount: 0, // 连续获取空日志的次数
-      isReducedInterval: false // 是否处于减少轮询间隔的状态
-    });
+        socket: socket,
+        programId: null,
+        logType: null,
+        offset: null, // 初始化为null，确保获取当前日志文件大小作为初始偏移量
+        isInitialFetch: false, // 是否处于初始获取状态
+        emptyLogCount: 0, // 连续获取空日志的次数
+        isReducedInterval: false // 是否处于减少轮询间隔的状态
+      });
       
       socket.on('start_log_tail', (data) => {
         this.startLogTail(socket.id, data.programId, data.logType);
@@ -63,7 +63,7 @@ class SocketServer {
     // 更新连接信息
     connection.programId = programId;
     connection.logType = logType;
-    connection.offset = null; // 重置偏移量，确保获取当前日志文件大小
+    connection.offset = null; // 重置偏移量为null，这是关键
     connection.isInitialFetch = true; // 标记为初始获取
     connection.emptyLogCount = 0; // 重置空日志计数
     connection.isReducedInterval = false; // 重置轮询间隔状态
@@ -72,6 +72,9 @@ class SocketServer {
     this.stopLogTail(socketId);
     
     // 设置定时器定期获取日志
+    // 立即执行一次，不要等待第一个间隔
+    this.fetchAndPushLogs(socketId);
+    
     const timerId = setInterval(() => {
       this.fetchAndPushLogs(socketId);
     }, 1000); // 每秒获取一次日志
@@ -103,8 +106,8 @@ class SocketServer {
       // 只获取增量日志，不获取历史日志
       const readLength = 10000;
       
-      // 如果还没有设置偏移量，先获取当前日志文件大小作为初始偏移量
-      if (!connection.offset) {
+      // [修复] 使用严格等于 null 来判断是否初始化，避免 offset 为 0 时被误判
+      if (connection.offset === null) {
         // 获取程序信息，包括日志文件大小
         try {
           const processInfo = await callRpc(projectId, 'supervisor.getProcessInfo', [programName]);
@@ -173,7 +176,7 @@ class SocketServer {
           }, 10000); // 减少轮询间隔：每10秒获取一次日志
           this.timers.set(socketId, timerId);
           connection.isReducedInterval = true;
-          console.log(`已减少日志轮询频率: ${connection.programId} (${connection.logType})`);
+          // console.log(`已减少日志轮询频率: ${connection.programId} (${connection.logType})`);
         } else if (connection.emptyLogCount < 5) {
           // 仍然发送空日志块，让前端知道没有日志内容
           connection.socket.emit('log_chunk', {
@@ -185,7 +188,7 @@ class SocketServer {
       }
       
     } catch (error) {
-      console.error(`Error fetching logs for ${connection.programId} (${connection.logType}):`, error);
+      console.error(`Error fetching logs for ${connection.programId} (${connection.logType}):`, error.message);
       // 如果是NO_FILE错误，不发送错误信息，因为这是正常情况
       if (!error.message.includes('NO_FILE')) {
         connection.socket.emit('log_error', {
@@ -214,7 +217,6 @@ class SocketServer {
           }, 10000); // 减少轮询间隔：每10秒获取一次日志
           this.timers.set(socketId, timerId);
           connection.isReducedInterval = true;
-          console.log(`已减少日志轮询频率: ${connection.programId} (${connection.logType}) - NO_FILE`);
         }
       }
     }

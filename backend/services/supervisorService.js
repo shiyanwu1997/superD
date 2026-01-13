@@ -463,7 +463,6 @@ const getProcessStdoutLog = async (projectId, programName, offset = 0, length = 
   try {
     // 安全检查：即使收到offset=-1，也只获取当前偏移量的日志，不返回历史日志
     if (offset === -1) {
-      // 获取当前日志文件大小，直接返回空日志和当前文件大小作为偏移量
       let fileSize = 0;
       try {
         const info = await callRpc(projectId, 'supervisor.getProcessInfo', [programName]);
@@ -477,6 +476,9 @@ const getProcessStdoutLog = async (projectId, programName, offset = 0, length = 
     // 使用readProcessStdoutLog获取从指定偏移量开始的日志
     let logs = await callRpc(projectId, 'supervisor.readProcessStdoutLog', [programName, offset, length]);
     
+    // [修复] 捕获原始日志长度，用于准确计算偏移量
+    const rawLength = logs ? logs.length : 0;
+    
     // 确保日志数据具有正确的换行符格式
     if (typeof logs === 'string') {
       // 统一换行符格式，确保每行日志都以换行符结束
@@ -485,18 +487,15 @@ const getProcessStdoutLog = async (projectId, programName, offset = 0, length = 
       logs = logs || '';
     }
     
-    // 计算新的偏移量
-    const newOffset = offset + logs.length;
+    // [修复] 使用原始长度计算新的偏移量
+    const newOffset = offset + rawLength;
     
-    // 直接返回正常顺序的日志，不进行反转
     return { logs, offset: newOffset };
   } catch (error) {
-    // 如果是NO_FILE错误，返回空日志而不是抛出错误，并且减少日志输出
+    // 如果是NO_FILE错误，返回空日志
     if (error.message?.includes('NO_FILE')) {
-      console.debug(`获取标准输出日志失败 (${programName}): 日志文件不存在，返回空日志`);
       return { logs: '', offset: offset };
     }
-    // 其他错误仍然记录为错误日志
     console.error(`获取标准输出日志失败 (${programName}):`, error + '\n');
     throw error;
   }
@@ -505,9 +504,8 @@ const getProcessStdoutLog = async (projectId, programName, offset = 0, length = 
 // 获取程序标准错误日志
 const getProcessStderrLog = async (projectId, programName, offset = 0, length = 100000) => {
   try {
-    // 安全检查：即使收到offset=-1，也只获取当前偏移量的日志，不返回历史日志
+    // 安全检查
     if (offset === -1) {
-      // 获取当前日志文件大小，直接返回空日志和当前文件大小作为偏移量
       let fileSize = 0;
       try {
         const info = await callRpc(projectId, 'supervisor.getProcessInfo', [programName]);
@@ -518,29 +516,25 @@ const getProcessStderrLog = async (projectId, programName, offset = 0, length = 
       return { logs: '', offset: fileSize };
     }
     
-    // 使用readProcessStderrLog获取从指定偏移量开始的日志
     let logs = await callRpc(projectId, 'supervisor.readProcessStderrLog', [programName, offset, length]);
     
-    // 确保日志数据具有正确的换行符格式
+    // [修复] 捕获原始日志长度
+    const rawLength = logs ? logs.length : 0;
+    
     if (typeof logs === 'string') {
-      // 统一换行符格式，确保每行日志都以换行符结束
       logs = logs.replace(/\r\n/g, '\n');
     } else {
       logs = logs || '';
     }
     
-    // 计算新的偏移量
-    const newOffset = offset + logs.length;
+    // [修复] 使用原始长度计算新的偏移量
+    const newOffset = offset + rawLength;
     
-    // 直接返回正常顺序的日志，不进行反转
     return { logs, offset: newOffset };
   } catch (error) {
-    // 如果是NO_FILE错误，返回空日志而不是抛出错误，并且减少日志输出
     if (error.message?.includes('NO_FILE')) {
-      console.debug(`获取标准错误日志失败 (${programName}): 日志文件不存在，返回空日志`);
       return { logs: '', offset: offset };
     }
-    // 其他错误仍然记录为错误日志
     console.error(`获取标准错误日志失败 (${programName}):`, error + '\n');
     throw error;
   }
