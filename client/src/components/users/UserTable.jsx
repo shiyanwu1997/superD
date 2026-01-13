@@ -4,14 +4,40 @@ import { KeyOutlined, DeleteOutlined, PlusOutlined, MinusOutlined } from '@ant-d
 import { useAuth } from '../../contexts/AuthContext';
 import { updateUserPassword, updateUserCreatedBy, deleteUser, setUserProjectPermission, removeUserProjectPermission } from '../../utils/api';
 
-const UserTable = ({ users, projects, loading, onRoleChange, onUserUpdate }) => {
+const UserTable = ({ users, projects, loading, onRoleChange, onUserUpdate, allUsers = [] }) => {
   const { user } = useAuth();
+  // 存储每个用户-项目组合的加载状态，格式：{ 'userId-projectId': true/false }
+  const [loadingPermissions, setLoadingPermissions] = useState({});
 
   // 生成头像颜色
   const getAvatarColor = (username) => {
     const colors = ['#f56a00', '#7265e6', '#ffbf00', '#00a2ae', '#8543e0'];
     const hash = username.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
     return colors[hash % colors.length];
+  };
+
+  // 处理项目权限的添加/移除
+  const handlePermissionToggle = async (userId, projectId, projectName, isAdd) => {
+    // 设置加载状态
+    const key = `${userId}-${projectId}`;
+    setLoadingPermissions(prev => ({ ...prev, [key]: true }));
+    
+    try {
+      if (isAdd) {
+        await setUserProjectPermission(userId, projectId);
+        message.success(`已添加项目：${projectName}`);
+      } else {
+        await removeUserProjectPermission(userId, projectId);
+        message.success(`已移除项目：${projectName}`);
+      }
+      onUserUpdate(); // 刷新数据
+    } catch (error) {
+      console.error('权限更新失败:', error);
+      message.error('权限更新失败');
+    } finally {
+      // 清除加载状态
+      setLoadingPermissions(prev => ({ ...prev, [key]: false }));
+    }
   };
 
   const columns = [
@@ -26,7 +52,7 @@ const UserTable = ({ users, projects, loading, onRoleChange, onUserUpdate }) => 
       title: '用户名', 
       dataIndex: 'username', 
       key: 'username',
-      render: (username, record) => (
+      render: (username) => (
         <Space size="middle">
           <Avatar style={{ backgroundColor: getAvatarColor(username) }} size="small">
             {username.charAt(0).toUpperCase()}
@@ -41,16 +67,16 @@ const UserTable = ({ users, projects, loading, onRoleChange, onUserUpdate }) => 
       key: 'roleId',
       render: (roleId, record) => {
         // 只有超级管理员可以修改角色，且不能修改admin用户的角色
-        const canEditRole = user?.roleId === 1 && record.username !== 'admin';
+        const canEditRole = Number(user?.roleId) === 1 && record.username !== 'admin';
         
         if (canEditRole) {
           return (
             <Select
-              value={roleId}
-              onChange={(newRoleId) => onRoleChange(record.id, newRoleId, record)}
-              style={{ width: 120 }}
-              size="small"
-            >
+                value={roleId}
+                onChange={(newRoleId) => onRoleChange(record.id, newRoleId)}
+                style={{ width: 120 }}
+                size="small"
+              >
               <Select.Option value={2}>普通管理员</Select.Option>
               <Select.Option value={3}>普通用户</Select.Option>
             </Select>
@@ -59,8 +85,8 @@ const UserTable = ({ users, projects, loading, onRoleChange, onUserUpdate }) => 
         
         // 静态角色标签显示
         return (
-          <Tag color={roleId === 1 ? 'blue' : roleId === 2 ? 'green' : 'default'}>
-            {roleId === 1 ? '超级管理员' : roleId === 2 ? '普通管理员' : '普通用户'}
+          <Tag color={Number(roleId) === 1 ? 'blue' : Number(roleId) === 2 ? 'green' : 'default'}>
+            {Number(roleId) === 1 ? '超级管理员' : Number(roleId) === 2 ? '普通管理员' : '普通用户'}
           </Tag>
         );
       }
@@ -71,21 +97,19 @@ const UserTable = ({ users, projects, loading, onRoleChange, onUserUpdate }) => 
       key: 'createdBy',
       render: (createdBy, record) => {
         // 超级管理员不显示上级管理员
-        if (record.roleId === 1) {
+        if (Number(record.roleId) === 1) {
           return '-';
         }
         
-        // 管理员默认上级是admin
-        if (record.roleId === 2) {
+        // 普通管理员默认上级是admin
+        if (Number(record.roleId) === 2) {
           return 'admin';
         }
         
-        // 只有普通用户显示上级管理员
-        if (record.roleId === 3) {
+        // 只有普通用户(roleId=3)显示上级管理员
+        if (Number(record.roleId) === 3) {
           // 只有超级管理员可以修改上级管理员
-          if (user?.roleId === 1) {
-            // 找到当前选中的管理员用户
-            const selectedAdmin = users.find(u => u.id === createdBy);
+          if (Number(user?.roleId) === 1) {
             return (
               <Select
                 value={createdBy}
@@ -99,15 +123,25 @@ const UserTable = ({ users, projects, loading, onRoleChange, onUserUpdate }) => 
                 size="small"
                 placeholder="选择上级管理员"
               >
-                {users
+                {(allUsers.length ? allUsers : users)
                   .filter(u => Number(u.roleId) === 2)
                   .map(u => <Select.Option key={u.id} value={u.id}>{u.username}</Select.Option>)}
               </Select>
             );
           }
           
-          // 其他角色只能查看，直接使用后端提供的createdByUsername
-          return record.createdByUsername || '无';
+          // 其他角色只能查看，优先使用后端提供的createdByUsername
+          if (record.createdByUsername) {
+            return record.createdByUsername;
+          }
+          
+          // 如果createdByUsername不存在，尝试从完整用户列表中查找
+          const adminUser = (allUsers.length ? allUsers : users).find(u => u.id === createdBy);
+          if (adminUser) {
+            return adminUser.username;
+          }
+          
+          return '无';
         }
         return '-';
 
@@ -117,31 +151,10 @@ const UserTable = ({ users, projects, loading, onRoleChange, onUserUpdate }) => 
       title: '项目权限',
       key: 'permissions',
       render: (_, record) => {
-        const [loading, setLoading] = useState(false);
         const userProjects = record.projectPermissions?.map(p => p.projectId) || [];
         const projectCount = userProjects.length;
-        const hasAllPermissions = record.roleId === 1;
-        const isAdmin = user?.roleId === 1 || user?.roleId === 2;
-        
-        // 处理项目权限的添加/移除
-        const handlePermissionToggle = async (projectId, projectName, isAdd) => {
-          setLoading(true);
-          try {
-            if (isAdd) {
-              await setUserProjectPermission(record.id, projectId);
-              message.success(`已添加项目：${projectName}`);
-            } else {
-              await removeUserProjectPermission(record.id, projectId);
-              message.success(`已移除项目：${projectName}`);
-            }
-            onUserUpdate(); // 刷新数据
-          } catch (error) {
-            console.error('权限更新失败:', error);
-            message.error('权限更新失败');
-          } finally {
-            setLoading(false);
-          }
-        };
+        const hasAllPermissions = Number(record.roleId) === 1;
+        const isAdmin = Number(user?.roleId) === 1 || Number(user?.roleId) === 2;
         
         if (hasAllPermissions) {
           return <Tag color="blue">所有项目</Tag>;
@@ -151,17 +164,21 @@ const UserTable = ({ users, projects, loading, onRoleChange, onUserUpdate }) => 
         const unassignedProjects = projects.filter(p => !userProjects.includes(p.id));
         
         // 已分配项目标签，可点击移除
-        const projectTags = assignedProjects.slice(0, 3).map(p => (
-          <Tag
-            key={p.id}
-            color="green"
-            style={{ margin: '2px' }}
-            closable={isAdmin}
-            onClose={() => handlePermissionToggle(p.id, p.name, false)}
-          >
-            {p.name}
-          </Tag>
-        ));
+        const projectTags = assignedProjects.slice(0, 3).map(p => {
+          const key = `${record.id}-${p.id}`;
+          const isLoading = loadingPermissions[key];
+          return (
+            <Tag
+              key={p.id}
+              color="green"
+              style={{ margin: '2px' }}
+              closable={isAdmin && !isLoading}
+              onClose={() => handlePermissionToggle(record.id, p.id, p.name, false)}
+            >
+              {isLoading ? <span style={{ opacity: 0.7 }}>{p.name}...</span> : p.name}
+            </Tag>
+          );
+        });
         
         if (projectCount > 3) {
           projectTags.push(
@@ -181,17 +198,22 @@ const UserTable = ({ users, projects, loading, onRoleChange, onUserUpdate }) => 
                 if (value) {
                   const project = projects.find(p => p.id === value);
                   if (project) {
-                    handlePermissionToggle(value, project.name, true);
+                    handlePermissionToggle(record.id, value, project.name, true);
                   }
                 }
               }}
-              loading={loading}
               showArrow
               allowClear
             >
-              {unassignedProjects.map(p => (
-                <Select.Option key={p.id} value={p.id}>{p.name}</Select.Option>
-              ))}
+              {unassignedProjects.map(p => {
+                const key = `${record.id}-${p.id}`;
+                const isLoading = loadingPermissions[key];
+                return (
+                  <Select.Option key={p.id} value={p.id} disabled={isLoading}>
+                    {isLoading ? <span style={{ opacity: 0.7 }}>{p.name}...</span> : p.name}
+                  </Select.Option>
+                );
+              })}
             </Select>
           </div>
         );

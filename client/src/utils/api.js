@@ -1,17 +1,69 @@
 import axios from 'axios';
 
-// 创建axios实例
-const api = axios.create({
-  baseURL: 'http://localhost:3000/api',
-  timeout: 10000,
-  withCredentials: true, // 允许携带cookie
+/**
+ * 创建axios实例的基础配置
+ */
+const baseAxiosConfig = {
+  baseURL: import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : 'http://localhost:3000/api',
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json'
   }
-});
+};
 
-// 请求拦截器：添加认证令牌
-api.interceptors.request.use(config => {
+/**
+ * 创建通用的请求日志拦截器
+ * @param {string} logPrefix - 日志前缀
+ * @returns {function} 拦截器函数
+ */
+const createRequestLogger = (logPrefix = 'API') => {
+  return config => {
+    console.log(`[${new Date().toISOString()}] ${logPrefix}请求: ${config.method.toUpperCase()} ${config.url}`);
+    console.log(`请求参数: ${JSON.stringify(config.params || {}, null, 2)}`);
+    console.log(`请求数据: ${JSON.stringify(config.data || {}, null, 2)}`);
+    return config;
+  };
+};
+
+/**
+ * 创建通用的响应日志拦截器
+ * @param {string} logPrefix - 日志前缀
+ * @returns {function} 拦截器函数
+ */
+const createResponseLogger = (logPrefix = 'API') => {
+  return response => {
+    console.log(`[${new Date().toISOString()}] ${logPrefix}响应: ${response.config.method.toUpperCase()} ${response.config.url} ${response.status}`);
+    console.log(`响应数据: ${JSON.stringify(response.data, null, 2)}`);
+    return response;
+  };
+};
+
+/**
+ * 创建通用的错误日志拦截器
+ * @param {string} logPrefix - 日志前缀
+ * @returns {function} 拦截器函数
+ */
+const createErrorLogger = (logPrefix = 'API') => {
+  return error => {
+    console.error(`[${new Date().toISOString()}] ${logPrefix}响应错误: ${error.config?.method?.toUpperCase()} ${error.config?.url}`);
+    if (error.response) {
+      console.error(`错误状态码: ${error.response.status}`);
+      console.error(`错误数据: ${JSON.stringify(error.response.data, null, 2)}`);
+    } else if (error.request) {
+      console.error(`请求已发送但未收到响应: ${JSON.stringify(error.request, null, 2)}`);
+    } else {
+      console.error(`请求配置错误: ${error.message}`);
+    }
+    return Promise.reject(error);
+  };
+};
+
+/**
+ * 认证令牌拦截器
+ * @param {Object} config - axios配置对象
+ * @returns {Object} 配置对象
+ */
+const authInterceptor = config => {
   // 从localStorage获取令牌（如果存在）
   const token = localStorage.getItem('token');
   
@@ -21,10 +73,37 @@ api.interceptors.request.use(config => {
   }
   
   return config;
-}, error => {
-  // 处理请求错误
-  return Promise.reject(error);
+};
+
+// 创建主API实例
+const api = axios.create({
+  ...baseAxiosConfig,
+  timeout: 28000 // 延长超时时间到28秒，以匹配后端优化后的启动检查时间
 });
+
+// 创建连接状态检查专用API实例
+const checkStatusApi = axios.create({
+  ...baseAxiosConfig,
+  timeout: 6000 // 适度延长连接状态检查超时时间
+});
+
+// 为api实例添加拦截器
+api.interceptors.request.use(createRequestLogger('API'));
+api.interceptors.request.use(authInterceptor);
+api.interceptors.response.use(createResponseLogger('API'));
+api.interceptors.response.use(null, createErrorLogger('API'));
+
+// 为checkStatusApi实例添加拦截器
+checkStatusApi.interceptors.request.use(createRequestLogger('状态检查'));
+checkStatusApi.interceptors.request.use(authInterceptor);
+checkStatusApi.interceptors.response.use(createResponseLogger('状态检查'));
+checkStatusApi.interceptors.response.use(null, createErrorLogger('状态检查'));
+
+// 获取项目列表
+export const getProjects = async () => {
+  const response = await api.get('/projects');
+  return response.data;
+};
 
 // 登录请求
 export const login = async (username, password) => {
@@ -57,16 +136,34 @@ export const getUserInfo = async () => {
   }
 };
 
-// 获取用户可访问的项目列表
-export const getProjects = async () => {
-  const response = await api.get('/projects');
-  return response.data;
-};
+// 原getProjects函数已移至文件顶部
 
 // 获取项目下的程序列表
 export const getProgramsByProject = async (projectId, options = {}) => {
+  console.log('发送getProgramsByProject请求:', projectId);
   const response = await api.get(`/projects/${projectId}/programs`, options);
+  console.log('getProgramsByProject响应数据:', response.data);
+  // 检查每个程序是否包含uptime字段
+  response.data.forEach(program => {
+    console.log(`程序 ${program.name} 的uptime字段:`, program.uptime);
+  });
   return response.data;
+};
+
+// 检查单个项目的连接状态
+export const checkProjectStatus = async (projectId) => {
+  try {
+    // 使用专门的checkStatusApi实例进行连接状态检查，使用更短的超时时间
+    const response = await checkStatusApi.get(`/projects/${projectId}/status`);
+    return response.data.connectionStatus;
+  } catch (error) {
+    if (error.response?.data?.connectionStatus?.error) {
+      // 如果后端返回错误信息，使用后端的错误信息
+      return { connected: false, error: error.response.data.connectionStatus.error };
+    }
+    // 如果是超时错误或网络错误，返回统一的错误信息
+    return { connected: false, error: '连接失败' };
+  }
 };
 
 // 获取所有程序列表

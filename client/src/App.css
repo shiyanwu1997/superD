@@ -21,12 +21,12 @@ body {
   /* 主题模式切换 */
   --color-scheme: light;
   
-  /* 主色调 - 专业蓝色系 */
-  --primary-color: #2563EB;
-  --primary-dark: #1D4ED8;
-  --primary-darker: #1E40AF;
-  --primary-light: #DBEAFE;
-  --primary-hover: #1D4ED8;
+  /* 主色调 - 简约黑白灰系 */
+  --primary-color: #1f1f1f;
+  --primary-dark: #2d2d2d;
+  --primary-darker: #3a3a3a;
+  --primary-light: #e8e8e8;
+  --primary-hover: #2d2d2d;
   
   /* 辅助色 */
   --secondary-color: #64748B;
@@ -124,9 +124,9 @@ body {
     --color-scheme: dark;
     
     /* 主色调 - 深色模式适配 */
-    --primary-color: #3B82F6;
-    --primary-dark: #60A5FA;
-    --primary-light: #1E3A8A;
+    --primary-color: #94A3B8;
+    --primary-dark: #CBD5E1;
+    --primary-light: #64748B;
     
     /* 辅助色 */
     --secondary-color: #94A3B8;
@@ -154,7 +154,7 @@ body {
     --success-light: #047857;
     --warning-light: #B45309;
     --danger-light: #991B1B;
-    --info-light: #1E40AF;
+    --info-light: #374151;
   }
 }
 
@@ -442,24 +442,10 @@ body {
   min-height: 100vh !important;
   padding: 1rem;
   margin: 0;
-  background: linear-gradient(135deg, var(--bg-light) 0%, var(--bg-white) 100%);
+  background: var(--bg-secondary);
   position: relative;
   z-index: 1000;
   box-sizing: border-box;
-}
-
-/* 添加背景装饰元素 */
-.login-container::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" opacity="0.05"><circle cx="25" cy="25" r="2" fill="%233B82F6"/><circle cx="75" cy="75" r="2" fill="%233B82F6"/><circle cx="25" cy="75" r="2" fill="%233B82F6"/><circle cx="75" cy="25" r="2" fill="%233B82F6"/></svg>') repeat;
-  background-size: 100px 100px;
-  pointer-events: none;
-  z-index: -1;
 }
 
 .login-form {
@@ -483,7 +469,7 @@ body {
   left: 0;
   width: 100%;
   height: 4px;
-  background: linear-gradient(90deg, var(--primary-color), var(--primary-light));
+  background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
 }
 
 .login-form h2 {
@@ -525,7 +511,7 @@ body {
 .form-group input:focus {
   border-color: var(--primary-color);
   outline: none;
-  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1), inset 0 2px 4px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 0 0 4px rgba(31, 31, 31, 0.1), inset 0 2px 4px rgba(0, 0, 0, 0.04);
   transform: translateY(-1px);
   background-color: var(--bg-white);
 }

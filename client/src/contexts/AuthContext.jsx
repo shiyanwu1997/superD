@@ -29,10 +29,11 @@ export const AuthProvider = ({ children }) => {
       console.log('getUserInfo successful:', userInfo);
       setUser(userInfo);
       // 确保导航到主页面
-      console.log('Navigating to /programs/1');
+      console.log('Navigating to /programs');
       // 使用setTimeout确保状态更新后再跳转
+      // 跳转到不带projectId的项目列表页面，由ProgramsPage自动选择第一个项目
       setTimeout(() => {
-        navigate('/programs/1', { replace: true }); // 默认选择第一个项目，replace: true避免返回登录页
+        navigate('/programs', { replace: true });
       }, 0);
       return { success: true };
     } catch (error) {

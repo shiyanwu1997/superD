@@ -1,35 +1,42 @@
-// 前端配置文件
+/**
+ * 应用配置文件
+ * 包含所有可配置的参数，方便统一管理和修改
+ */
 
-// API配置
-export const API_CONFIG = {
-  BASE_URL: 'http://localhost:3000/api', // 后端API地址
-  TIMEOUT: 10000, // 请求超时时间（毫秒）
+export const AppConfig = {
+  /**
+   * 日志终端配置
+   */
+  logTerminal: {
+    // 日志显示的最大行数，设置为500表示只显示最新的500行日志
+    maxLogLines: 500,
+    
+    // 终端字体大小
+    fontSize: 12,
+    
+    // 终端字体族
+    fontFamily: 'Fira Code, Menlo, monospace',
+    
+    // 终端主题配置
+    theme: {
+      background: '#1e1e1e',
+      foreground: '#d4d4d4',
+      cursor: '#ffffff',
+      cursorAccent: '#000000'
+    }
+  },
+  
+  /**
+   * Socket.IO 配置
+   */
+  socket: {
+    url: 'http://localhost:3000',
+    options: {
+      transports: ['polling', 'websocket'],
+      timeout: 5000,
+      reconnectionAttempts: 3
+    }
+  }
 };
 
-// 默认值配置
-export const DEFAULT_VALUES = {
-  PROJECT_PORT: 9001, // 默认Supervisor端口
-  PASSWORD_MIN_LENGTH: 6, // 密码最小长度
-};
-
-// 路由配置
-export const ROUTES = {
-  LOGIN: '/login',
-  PROGRAMS: '/programs',
-  USERS: '/users',
-  PROGRAM_DETAIL: '/programs/:projectId/:programId',
-};
-
-// 消息配置
-export const MESSAGES = {
-  NETWORK_ERROR: '网络错误，请检查连接',
-  UNAUTHORIZED: '请先登录',
-  FORBIDDEN: '没有操作权限',
-  SERVER_ERROR: '服务器错误',
-};
-
-// 正则表达式配置
-export const REGEX = {
-  PORT: /^[1-9]\d*$/, // 端口号正则
-  IP: /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/, // IP地址正则
-};
+export default AppConfig;

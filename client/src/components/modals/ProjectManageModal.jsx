@@ -4,7 +4,7 @@ import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getProjects, createProject, updateProject, deleteProject } from '../../utils/api';
 
-const ProjectManageModal = ({ open, onClose }) => {
+const ProjectManageModal = ({ open, onClose, onRefresh }) => {
   const [projectModalTab, setProjectModalTab] = useState('list');
   const [editingProject, setEditingProject] = useState(null);
   const [projectForm] = Form.useForm();
@@ -25,9 +25,11 @@ const ProjectManageModal = ({ open, onClose }) => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       setProjectModalTab('list');
       projectForm.resetFields();
+      if (onRefresh) onRefresh();
     },
     onError: (error) => {
-      message.error('创建项目失败: ' + (error.response?.data?.error || error.message));
+      const serverError = error.response?.data?.message || error.response?.data?.error || error.message;
+      message.error('创建项目失败: ' + serverError);
     },
   });
 
@@ -40,9 +42,11 @@ const ProjectManageModal = ({ open, onClose }) => {
       setProjectModalTab('list');
       setEditingProject(null);
       projectForm.resetFields();
+      if (onRefresh) onRefresh();
     },
     onError: (error) => {
-      message.error('更新项目失败: ' + (error.response?.data?.error || error.message));
+      const serverError = error.response?.data?.message || error.response?.data?.error || error.message;
+      message.error('更新项目失败: ' + serverError);
     },
   });
 
@@ -52,9 +56,11 @@ const ProjectManageModal = ({ open, onClose }) => {
     onSuccess: () => {
       message.success('项目删除成功');
       queryClient.invalidateQueries({ queryKey: ['projects'] });
+      if (onRefresh) onRefresh();
     },
     onError: (error) => {
-      message.error('删除项目失败: ' + (error.response?.data?.error || error.message));
+      const serverError = error.response?.data?.message || error.response?.data?.error || error.message;
+      message.error('删除项目失败: ' + serverError);
     },
   });
 
@@ -97,14 +103,14 @@ const ProjectManageModal = ({ open, onClose }) => {
       username: record.supervisorConfig?.username,
       password: record.supervisorConfig?.password,
     });
-    setProjectModalTab('add');
+    setProjectModalTab('config');
   };
 
   // 处理添加新项目
   const handleAddProject = () => {
     setEditingProject(null);
     projectForm.resetFields();
-    setProjectModalTab('add');
+    setProjectModalTab('config');
   };
 
   // 项目列配置
@@ -166,8 +172,8 @@ const ProjectManageModal = ({ open, onClose }) => {
             )
           },
           {
-            key: 'add',
-            label: editingProject ? '编辑项目' : '添加项目',
+            key: 'config',
+            label: editingProject ? '编辑项目' : '项目配置',
             children: (
               <Form form={projectForm} onFinish={handleProjectSubmit} layout="vertical">
                 <Form.Item name="name" label="项目名称" rules={[{ required: true }]}>

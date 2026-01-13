@@ -1,0 +1,4 @@
+[
+  { "id": 1, "name": "admin", "description": "管理员" },
+  { "id": 2, "name": "developer", "description": "开发者" }
+]

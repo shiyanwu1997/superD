@@ -21,7 +21,7 @@ module.exports = {
     },
     {
       name: 'supervisor-frontend',
-      script: './node_modules/.bin/serve',
+      script: './node_modules/serve/build/main.js',
       args: ['-s', 'dist', '-l', '6001'],
       cwd: './client',
       instances: 1,

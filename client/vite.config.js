@@ -18,5 +18,27 @@ export default defineConfig({
         changeOrigin: true
       }
     }
+  },
+  build: {
+    // 调整代码块大小警告阈值
+    chunkSizeWarningLimit: 1200,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // 将大型UI框架单独打包
+          antd: ['antd', '@ant-design/icons'],
+          // 将终端组件单独打包
+          xterm: ['@xterm/xterm', '@xterm/addon-fit'],
+          // 将路由相关依赖单独打包
+          router: ['react-router-dom'],
+          // 将数据请求库单独打包
+          query: ['@tanstack/react-query'],
+          // 将实时通信库单独打包
+          socket: ['socket.io-client'],
+          // 将HTTP请求库单独打包
+          axios: ['axios']
+        }
+      }
+    }
   }
 })

@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Drawer, Button, Tabs, Spin, Tag, message, Descriptions } from 'antd';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Drawer, Button, Tabs, Spin, Tag, message, Descriptions, Tooltip } from 'antd';
 import { PlayCircleOutlined, PauseCircleOutlined, ReloadOutlined } from '@ant-design/icons';
 import { getProgramDetail, startProgram, stopProgram, restartProgram } from '../utils/api';
 import LogTerminal from '../components/LogTerminal';
@@ -44,14 +44,21 @@ const ProgramDetailPage = ({ isOpen, onClose, programId }) => {
     
     message.loading({ content: `${actionMap[action]}中...`, key: msgKey });
     try {
-      if (action === 'start') await startProgram(programId);
-      if (action === 'stop') await stopProgram(programId);
-      if (action === 'restart') await restartProgram(programId);
-      message.success({ content: `${actionMap[action]}成功`, key: msgKey, duration: 3 });
-      fetchProgramDetail(); // 操作成功后刷新程序详情
+      let result;
+      if (action === 'start') result = await startProgram(programId);
+      if (action === 'stop') result = await stopProgram(programId);
+      if (action === 'restart') result = await restartProgram(programId);
+      
+      // 检查API返回的success字段
+      if (result?.success) {
+        message.success({ content: `${actionMap[action]}成功`, key: msgKey, duration: 3 });
+        fetchProgramDetail(); // 操作成功后刷新程序详情
+      } else {
+        throw new Error(result?.message || `${actionMap[action]}失败`);
+      }
     } catch (error) {
       console.error(`${actionMap[action]}失败:`, error);
-      message.error({ content: `${actionMap[action]}失败`, key: msgKey, duration: 3 });
+      message.error({ content: `${error.message || actionMap[action]}失败`, key: msgKey, duration: 3 });
     }
   };
 
@@ -76,7 +83,16 @@ const ProgramDetailPage = ({ isOpen, onClose, programId }) => {
             <div style={{ margin: '16px 0' }}>
               <Button type="primary" onClick={() => handleAction('start')} disabled={program.status === 'RUNNING'} icon={<PlayCircleOutlined />}>启动</Button>
               <Button danger onClick={() => handleAction('stop')} disabled={program.status === 'STOPPED'} style={{ marginLeft: 8 }} icon={<PauseCircleOutlined />}>停止</Button>
-              <Button onClick={() => handleAction('restart')} style={{ marginLeft: 8 }} icon={<ReloadOutlined />}>重启</Button>
+              <Tooltip title={program.status === 'STOPPED' ? '未运行的服务不支持重启' : '重启'}>
+                <Button 
+                  onClick={() => handleAction('restart')} 
+                  style={{ marginLeft: 8 }} 
+                  icon={<ReloadOutlined />}
+                  disabled={program.status === 'STOPPED'}
+                >
+                  重启
+                </Button>
+              </Tooltip>
             </div>
 
             <Tabs

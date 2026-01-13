@@ -16,7 +16,8 @@ const ChangePasswordModal = ({ open, onClose }) => {
       passwordForm.resetFields();
     },
     onError: (error) => {
-      message.error('修改密码失败: ' + (error.response?.data?.error || error.message));
+      const serverError = error.response?.data?.message || error.response?.data?.error || error.message;
+      message.error('修改密码失败: ' + serverError);
     },
   });
 
