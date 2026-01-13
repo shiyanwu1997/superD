@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Layout, Menu, Table, Button, Tag, Space, message,
   Card, Row, Col, Statistic, Empty, Badge,
@@ -83,7 +83,7 @@ const ProgramsPage = () => {
   // --- API 交互 ---
 
   // 辅助函数：处理连接状态的延迟显示
-  const getDelayedConnectionStatus = (connectionStatus) => {
+  const getDelayedConnectionStatus = useCallback((connectionStatus) => {
     const currentTime = new Date().getTime();
     const pageLoadDuration = currentTime - pageLoadTime;
     
@@ -99,15 +99,17 @@ const ProgramsPage = () => {
     
     // 如果连接失败且页面加载时间超过5秒，则显示实际状态
     return connectionStatus;
-  };
+  }, [pageLoadTime]);
 
-  const fetchProjects = async () => {
+  const fetchProjects = useCallback(async () => {
     try {
       setLoadingProjects(true);
       
-      // 记录页面加载时间
-      const loadTime = new Date().getTime();
-      setPageLoadTime(loadTime);
+      // 只在首次加载时记录页面加载时间
+      if (!pageLoadTime) {
+        const loadTime = new Date().getTime();
+        setPageLoadTime(loadTime);
+      }
       console.log('调用getProjects API...');
       
       const data = await getProjects();
@@ -193,7 +195,7 @@ const ProgramsPage = () => {
       setLoadingProjects(false);
       console.log('项目列表加载完成');
     }
-  };
+  }, [getDelayedConnectionStatus, pageLoadTime]);
 
   const fetchPrograms = async (pid) => {
     if (!pid) return;
@@ -246,7 +248,7 @@ const ProgramsPage = () => {
     if (user) {
       fetchProjects();
     }
-  }, [user]); // 仅在user变化时执行
+  }, [user, fetchProjects]); // 仅在user或fetchProjects变化时执行
 
   // 已移除5秒后重新检查所有项目连接状态的定时逻辑
   // 仅在页面首次加载时检查一次连接状态
@@ -365,7 +367,7 @@ const ProgramsPage = () => {
       title: '程序名称',
       dataIndex: 'name',
       width: 300,
-      render: (text, record) => (
+      render: (text) => (
         <div>
           <Text strong style={{ fontSize: 14 }}>{text}</Text>
         </div>

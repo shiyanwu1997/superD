@@ -106,7 +106,7 @@ class SocketServer {
       // 只获取增量日志，不获取历史日志
       const readLength = 10000;
       
-      // [修复] 使用严格等于 null 来判断是否初始化，避免 offset 为 0 时被误判
+      // [修复] 使用严格等于 null 来判断是否初始化，避免 offset 为 0 时被误判导致死循环
       if (connection.offset === null) {
         // 获取程序信息，包括日志文件大小
         try {
@@ -117,8 +117,8 @@ class SocketServer {
           connection.offset = logFileSize;
         } catch (error) {
           console.error(`获取进程信息失败 (${programName}):`, error);
-          // 如果获取失败，使用0作为初始偏移量
-          connection.offset = 0;
+          // 如果获取失败，使用-1作为初始偏移量，确保只获取最新日志
+          connection.offset = -1;
         }
         
         // 发送初始日志块（空内容），让前端清空终端并显示提示信息

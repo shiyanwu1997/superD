@@ -457,43 +457,30 @@ const getProcessLogs = async (projectId, programName, offset = 0, length = 10000
     throw error;
   }
 };
-
-// 获取程序标准输出日志
-const getProcessStdoutLog = async (projectId, programName, offset = 0, length = 100000) => {
+// 获取程序标准输出日志 - 使用Supervisor的tailProcessStdoutLog方法，默认返回最新的500行日志
+const getProcessStdoutLog = async (projectId, programName, offset = 0, length = 500) => {
   try {
-    // 安全检查：即使收到offset=-1，也只获取当前偏移量的日志，不返回历史日志
-    if (offset === -1) {
-      let fileSize = 0;
-      try {
-        const info = await callRpc(projectId, 'supervisor.getProcessInfo', [programName]);
-        fileSize = info.stdout_logfile_size || 0;
-      } catch (error) {
-        console.error(`获取进程信息失败 (${programName}):`, error);
-      }
-      return { logs: '', offset: fileSize };
-    }
+    console.log(`尝试获取程序标准输出日志: ${programName}, 项目ID: ${projectId}, 偏移量: ${offset}, 长度: ${length}`);
+    // 使用Supervisor的tailProcessStdoutLog方法获取日志，该方法自动从文件末尾开始读取
+    let [logs, _logSize, _hasMore] = await callRpc(projectId, 'supervisor.tailProcessStdoutLog', [programName, offset, length]);
     
-    // 使用readProcessStdoutLog获取从指定偏移量开始的日志
-    let logs = await callRpc(projectId, 'supervisor.readProcessStdoutLog', [programName, offset, length]);
-    
-    // [修复] 捕获原始日志长度，用于准确计算偏移量
-    const rawLength = logs ? logs.length : 0;
+    console.log(`获取到标准输出日志: 类型=${typeof logs}, 长度=${logs.length}, 内容=${JSON.stringify(logs.substring(0, 100))}...`);
     
     // 确保日志数据具有正确的换行符格式
     if (typeof logs === 'string') {
-      // 统一换行符格式，确保每行日志都以换行符结束
+      // 统一换行符格式
       logs = logs.replace(/\r\n/g, '\n');
+      // 移除首尾空行并按行分割
+      const logLines = logs.split('\n').filter(line => line.trim() !== '');
+      return { logs: logLines.join('\n'), offset: 0 };
     } else {
-      logs = logs || '';
+      return { logs: '', offset: 0 };
     }
-    
-    // [修复] 使用原始长度计算新的偏移量
-    const newOffset = offset + rawLength;
-    
-    return { logs, offset: newOffset };
   } catch (error) {
+    console.log(`获取标准输出日志时发生错误: 类型=${typeof error}, 信息=${error.message}, 堆栈=${error.stack}`);
     // 如果是NO_FILE错误，返回空日志
     if (error.message?.includes('NO_FILE')) {
+      console.log(`日志文件不存在，返回空日志: ${programName}`);
       return { logs: '', offset: offset };
     }
     console.error(`获取标准输出日志失败 (${programName}):`, error + '\n');
@@ -501,38 +488,29 @@ const getProcessStdoutLog = async (projectId, programName, offset = 0, length = 
   }
 };
 
-// 获取程序标准错误日志
-const getProcessStderrLog = async (projectId, programName, offset = 0, length = 100000) => {
+// 获取程序标准错误日志 - 使用Supervisor的tailProcessStderrLog方法，默认返回最新的500行日志
+const getProcessStderrLog = async (projectId, programName, offset = 0, length = 500) => {
   try {
-    // 安全检查
-    if (offset === -1) {
-      let fileSize = 0;
-      try {
-        const info = await callRpc(projectId, 'supervisor.getProcessInfo', [programName]);
-        fileSize = info.stderr_logfile_size || 0;
-      } catch (error) {
-        console.error(`获取进程信息失败 (${programName}):`, error);
-      }
-      return { logs: '', offset: fileSize };
-    }
+    console.log(`尝试获取程序标准错误日志: ${programName}, 项目ID: ${projectId}, 偏移量: ${offset}, 长度: ${length}`);
+    // 使用Supervisor的tailProcessStderrLog方法获取日志，该方法自动从文件末尾开始读取
+    let [logs, _logSize, _hasMore] = await callRpc(projectId, 'supervisor.tailProcessStderrLog', [programName, offset, length]);
     
-    let logs = await callRpc(projectId, 'supervisor.readProcessStderrLog', [programName, offset, length]);
+    console.log(`获取到标准错误日志: 类型=${typeof logs}, 长度=${logs.length}, 内容=${JSON.stringify(logs.substring(0, 100))}...`);
     
-    // [修复] 捕获原始日志长度
-    const rawLength = logs ? logs.length : 0;
-    
+    // 确保日志数据具有正确的换行符格式
     if (typeof logs === 'string') {
+      // 统一换行符格式
       logs = logs.replace(/\r\n/g, '\n');
+      // 移除首尾空行并按行分割
+      const logLines = logs.split('\n').filter(line => line.trim() !== '');
+      return { logs: logLines.join('\n'), offset: 0 };
     } else {
-      logs = logs || '';
+      return { logs: '', offset: 0 };
     }
-    
-    // [修复] 使用原始长度计算新的偏移量
-    const newOffset = offset + rawLength;
-    
-    return { logs, offset: newOffset };
   } catch (error) {
+    console.log(`获取标准错误日志时发生错误: 类型=${typeof error}, 信息=${error.message}, 堆栈=${error.stack}`);
     if (error.message?.includes('NO_FILE')) {
+      console.log(`错误日志文件不存在，返回空日志: ${programName}`);
       return { logs: '', offset: offset };
     }
     console.error(`获取标准错误日志失败 (${programName}):`, error + '\n');
