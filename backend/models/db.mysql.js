@@ -41,7 +41,7 @@ pool.on('enqueue', () => {
 });
 
 // 带日志的查询包装函数，支持连接重试
-const queryWithLogs = async (sql, params = [], retryCount = 3, retryDelay = 50000) => {
+const queryWithLogs = async (sql, params = [], retryCount = 3, retryDelay = 1000) => {
   const start = Date.now();
   
   Logger.debug('数据库查询', { sql, params, retryCount });
@@ -155,19 +155,23 @@ async function getUserByUsername(username) {
 async function getUserProjects(userId) {
   const [userRows] = await queryWithLogs('SELECT * FROM users WHERE id = ?', [userId]);
   if (userRows.length === 0) return [];
-  
-  // admin用户默认拥有所有项目权限
-  if (userRows[0].username === 'admin') {
-    return getAllProjects();
-  }
-  
-  // 获取普通用户有权限的项目
+
+  if (userRows[0].username === 'admin') return getAllProjects();
+
   const [permRows] = await queryWithLogs('SELECT projectId FROM user_project_permissions WHERE userId = ?', [userId]);
-  const projectIds = permRows.map(p => p.projectId);
-  
-  if (projectIds.length === 0) return [];
-  
-  const [projectRows] = await queryWithLogs('SELECT * FROM projects WHERE id IN (?)', [projectIds]);
+  const projectIds = new Set(permRows.map(p => p.projectId));
+
+  // 程序权限也隐含项目可见性
+  const [progRows] = await queryWithLogs('SELECT programId FROM user_program_permissions WHERE userId = ?', [userId]);
+  for (const p of progRows) {
+    const pid = parseInt(p.programId.split('-')[0]);
+    if (!isNaN(pid)) projectIds.add(pid);
+  }
+
+  if (projectIds.size === 0) return [];
+
+  const ids = [...projectIds];
+  const [projectRows] = await queryWithLogs('SELECT * FROM projects WHERE id IN (?)', [ids]);
   // 将每个项目的JSON字符串解析为对象
   return projectRows.map(project => {
     if (project.supervisorConfig) {
@@ -558,6 +562,95 @@ async function updateUserPassword(userId, newPassword) {
   return true;
 }
 
+// ==================== 程序级权限（细粒度控制） ====================
+
+const getUserProgramPermissions = async (userId) => {
+  const [rows] = await queryWithLogs('SELECT * FROM user_program_permissions WHERE userId = ?', [userId]);
+  return rows;
+};
+
+const addUserProgramPermission = async (userId, programId) => {
+  const [userRows] = await queryWithLogs('SELECT * FROM users WHERE id = ?', [userId]);
+  if (userRows.length > 0 && userRows[0].username === 'admin') return true;
+
+  const [existingRows] = await queryWithLogs('SELECT * FROM user_program_permissions WHERE userId = ? AND programId = ?', [userId, programId]);
+  if (existingRows.length > 0) return true;
+
+  await queryWithLogs('INSERT INTO user_program_permissions (userId, programId) VALUES (?, ?)', [userId, programId]);
+  return true;
+};
+
+const removeUserProgramPermission = async (userId, programId) => {
+  await queryWithLogs('DELETE FROM user_program_permissions WHERE userId = ? AND programId = ?', [userId, programId]);
+  return true;
+};
+
+// 检查用户是否有程序操作权限（程序级优先，项目级兜底）
+const checkUserSpecificProgramPermission = async (userId, programId) => {
+  const [userRows] = await queryWithLogs('SELECT * FROM users WHERE id = ?', [userId]);
+  if (userRows.length === 0) return false;
+  if (userRows[0].username === 'admin') return true;
+
+  // 先检查程序级显式权限
+  const [permRows] = await queryWithLogs('SELECT * FROM user_program_permissions WHERE userId = ? AND programId = ?', [userId, programId]);
+  if (permRows.length > 0) return true;
+
+  // 再检查项目级权限（兜底）
+  const idParts = programId.toString().split('-');
+  if (idParts.length >= 2) {
+    const projectId = parseInt(idParts[0]);
+    if (!isNaN(projectId)) {
+      return checkUserProjectPermission(userId, projectId);
+    }
+  }
+
+  return false;
+};
+
+// ==================== 项目分组 ====================
+
+const getAllGroups = async () => {
+  const [rows] = await queryWithLogs('SELECT * FROM project_groups ORDER BY id');
+  return rows;
+};
+
+const createGroup = async (name, description = '') => {
+  const [existing] = await queryWithLogs('SELECT id FROM project_groups WHERE name = ?', [name]);
+  if (existing.length > 0) return null;
+  const [result] = await queryWithLogs('INSERT INTO project_groups (name, description) VALUES (?, ?)', [name, description]);
+  return { id: result.insertId, name, description };
+};
+
+const updateGroup = async (groupId, data) => {
+  await queryWithLogs('UPDATE project_groups SET name = ?, description = ? WHERE id = ?', [data.name, data.description || '', groupId]);
+  const [rows] = await queryWithLogs('SELECT * FROM project_groups WHERE id = ?', [groupId]);
+  return rows[0] || null;
+};
+
+const deleteGroup = async (groupId) => {
+  await queryWithLogs('UPDATE projects SET groupId = NULL WHERE groupId = ?', [groupId]);
+  await queryWithLogs('DELETE FROM project_groups WHERE id = ?', [groupId]);
+  return true;
+};
+
+const getProjectsByGroup = async (groupId) => {
+  const [rows] = await queryWithLogs('SELECT * FROM projects WHERE groupId = ?', [groupId]);
+  return rows.map(project => {
+    if (project.supervisorConfig) {
+      try {
+        if (typeof project.supervisorConfig === 'string') project.supervisorConfig = JSON.parse(project.supervisorConfig);
+        if (project.supervisorConfig.password) project.supervisorConfig.password = decrypt(project.supervisorConfig.password);
+      } catch (e) { project.supervisorConfig = null; }
+    }
+    return project;
+  });
+};
+
+const setProjectGroup = async (projectId, groupId) => {
+  await queryWithLogs('UPDATE projects SET groupId = ? WHERE id = ?', [groupId || null, projectId]);
+  return true;
+};
+
 module.exports = {
   getUserByUsername,
   getUserById,
@@ -579,5 +672,15 @@ module.exports = {
   updateUserPassword,
   getAllUsers,
   getAllRoles,
-  getAllUserProjectPermissions
+  getAllUserProjectPermissions,
+  getUserProgramPermissions,
+  addUserProgramPermission,
+  removeUserProgramPermission,
+  checkUserSpecificProgramPermission,
+  getAllGroups,
+  createGroup,
+  updateGroup,
+  deleteGroup,
+  getProjectsByGroup,
+  setProjectGroup
 };

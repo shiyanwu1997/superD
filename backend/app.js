@@ -1,27 +1,43 @@
+require('dotenv').config({ path: require('path').join(__dirname, '.env') });
+
+const path = require('path');
+const fs = require('fs');
 const express = require('express');
 const session = require('express-session');
 const bodyParser = require('body-parser');
+const helmet = require('helmet');
 const cors = require('cors');
 const bcrypt = require('bcrypt');
 const routes = require('./routes');
 const db = require('./models/db');
-const { SERVER_CONFIG, CORS_CONFIG, STORAGE_CONFIG } = require('./config');
+const { SERVER_CONFIG, CORS_CONFIG, STORAGE_CONFIG, SECURITY_CONFIG } = require('./config');
+
+// 启动时校验必需的环境变量
+const requiredEnvVars = [
+  { key: 'SESSION_SECRET', value: SERVER_CONFIG.SESSION_SECRET, name: 'SESSION_SECRET' },
+  { key: 'JWT_SECRET', value: SERVER_CONFIG.JWT_SECRET, name: 'JWT_SECRET' },
+  { key: 'ENCRYPTION_KEY', value: SECURITY_CONFIG.ENCRYPTION_KEY, name: 'ENCRYPTION_KEY' },
+];
+// MySQL 模式需额外校验数据库密码
+if (STORAGE_CONFIG.TYPE === 'mysql') {
+  requiredEnvVars.push({ key: 'MYSQL_PASSWORD', value: STORAGE_CONFIG.MYSQL.PASSWORD, name: 'MYSQL_PASSWORD' });
+}
+const missingVars = requiredEnvVars.filter(v => !v.value).map(v => v.name);
+if (missingVars.length > 0) {
+  console.error(`缺少必需的环境变量: ${missingVars.join(', ')}`);
+  console.error('请在环境变量或 .env 文件中设置这些值后重新启动');
+  process.exit(1);
+}
 const { initDatabase } = require('./init-db'); // 引入数据库初始化函数
 
 const app = express();
 
 // 中间件配置
+app.use(helmet({ contentSecurityPolicy: false })); // CSP 由前端控制
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 app.use(cors({
-  origin: function(origin, callback) {
-    // 允许本地开发环境的所有请求
-    if (!origin || origin.startsWith('http://localhost:')) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
+  origin: true,
   credentials: true
 }));
 
@@ -55,10 +71,25 @@ app.use(session({
   cookie: { secure: false }  // HTTPS 环境下设置为 true
 }));
 
-
+// 生产模式：托管前端静态文件（与API同端口，消除CORS）
+const clientDist = path.join(__dirname, '../client/dist');
+if (fs.existsSync(clientDist)) {
+  app.use(express.static(clientDist));
+}
 
 // 路由
 app.use('/', routes);
+
+// SPA fallback：非API请求返回 index.html
+app.use((req, res, next) => {
+  if (!req.path.startsWith('/api') && !req.path.startsWith('/socket.io')) {
+    const indexPath = path.join(__dirname, '../client/dist/index.html');
+    if (fs.existsSync(indexPath)) {
+      return res.sendFile(indexPath);
+    }
+  }
+  next();
+});
 
 // 引入自定义错误处理
 const { errorHandler, notFoundHandler } = require('./utils/errors');

@@ -30,7 +30,7 @@ export const AppConfig = {
    * Socket.IO 配置
    */
   socket: {
-    url: 'http://localhost:3000',
+    url: import.meta.env.VITE_API_URL || '',
     options: {
       transports: ['polling', 'websocket'],
       timeout: 5000,

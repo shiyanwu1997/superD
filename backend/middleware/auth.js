@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const db = require('../models/db');
 const { SERVER_CONFIG } = require('../config');
+const Logger = require('../utils/logger');
 
 // 生成JWT令牌
 function generateToken(user) {
@@ -26,18 +27,6 @@ function verifyToken(req, res, next) {
   } catch (error) {
     return res.status(401).json({ message: '无效的令牌' });
   }
-}
-
-// 检查用户是否有程序操作权限
-function checkProgramPermission(req, res, next) {
-  const { programId } = req.params;
-  const userId = req.user.userId;
-  
-  if (!db.checkUserProgramPermission(userId, parseInt(programId))) {
-    return res.status(403).json({ message: '没有权限操作此程序' });
-  }
-  
-  next();
 }
 
 // 检查是否为管理员（包括超级管理员和普通管理员）
@@ -91,22 +80,15 @@ async function checkAdminProjectPermission(req, res, next) {
     const project = await db.getProjectById(projectId);
     const projectName = project ? project.name : '未知项目';
     
-    console.log(`检查管理员 ${adminUser.username}（ID: ${adminUser.id}）是否有项目 ${projectId}（${projectName}）的权限`);
-    
-    // 获取用户的项目权限
-    const userProjectPermissions = await db.getAllUserProjectPermissions();
-    const userPermissions = userProjectPermissions.filter(perm => perm.userId === adminUser.id);
-    console.log(`用户项目权限: ${JSON.stringify(userPermissions)}`);
-    
-    if (!(await db.checkUserProjectPermission(user.userId, projectId))) {
-      console.log(`管理员 ${adminUser.username} 没有项目 ${projectId}（${projectName}）的权限`);
+    Logger.debug(`检查管理员权限`, { adminUser: adminUser.username, projectId, projectName });
+    const hasPermission = await db.checkUserProjectPermission(user.userId, projectId);
+    if (!hasPermission) {
+      Logger.warn(`管理员没有项目权限`, { adminUser: adminUser.username, projectId, projectName });
       return res.status(403).json({ message: '没有权限操作此项目' });
     }
-    
-    console.log(`管理员 ${adminUser.username} 有项目 ${projectId}（${projectName}）的权限`);
     next();
   } catch (error) {
-    console.error('检查项目权限时发生错误:', error);
+    Logger.error('检查项目权限时发生错误:', error);
     return res.status(500).json({ message: '内部服务器错误' });
   }
 }
@@ -114,7 +96,6 @@ async function checkAdminProjectPermission(req, res, next) {
 module.exports = {
   generateToken,
   verifyToken,
-  checkProgramPermission,
   checkAdmin,
   checkAdminProjectPermission
 };

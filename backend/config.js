@@ -4,22 +4,27 @@
 const SERVER_CONFIG = {
   PORT: process.env.PORT || 3000, // 服务器端口
   HOST: process.env.HOST || 'localhost', // 服务器主机
-  SESSION_SECRET: process.env.SESSION_SECRET || 'your-secret-key', // Session密钥
-  JWT_SECRET: process.env.JWT_SECRET || 'your-jwt-secret', // JWT密钥
+  SESSION_SECRET: process.env.SESSION_SECRET, // Session密钥（必须通过环境变量设置）
+  JWT_SECRET: process.env.JWT_SECRET, // JWT密钥（必须通过环境变量设置）
 };
 
-// 存储配置 - 仅使用MySQL存储
+// 存储配置 - 默认使用SQLite，可选MySQL
 const STORAGE_CONFIG = {
-  TYPE: process.env.STORAGE_TYPE || 'mysql', // 存储类型: 仅支持mysql
-  
-  // MySQL存储配置
+  TYPE: process.env.STORAGE_TYPE || 'sqlite', // 存储类型: sqlite (默认) 或 mysql
+
+  // SQLite存储配置
+  SQLITE: {
+    PATH: process.env.SQLITE_PATH || null, // SQLite文件路径，默认使用 data/supervisor.db
+  },
+
+  // MySQL存储配置（仅在 STORAGE_TYPE=mysql 时生效）
   MYSQL: {
-    HOST: process.env.MYSQL_HOST || 'localhost', // MySQL主机
-    PORT: process.env.MYSQL_PORT || 3306, // MySQL端口
-    USER: process.env.MYSQL_USER || 'root', // MySQL用户名
-    PASSWORD: process.env.MYSQL_PASSWORD || 'yang1340984855', // MySQL密码
-    DATABASE: process.env.MYSQL_DATABASE || 'supervisor', // MySQL数据库名
-    CONNECTION_LIMIT: process.env.MYSQL_CONNECTION_LIMIT || 10, // 连接池大小
+    HOST: process.env.MYSQL_HOST || 'localhost',
+    PORT: process.env.MYSQL_PORT || 3306,
+    USER: process.env.MYSQL_USER || 'root',
+    PASSWORD: process.env.MYSQL_PASSWORD,
+    DATABASE: process.env.MYSQL_DATABASE || 'supervisor',
+    CONNECTION_LIMIT: process.env.MYSQL_CONNECTION_LIMIT || 10,
   }
 };
 
@@ -53,7 +58,7 @@ const LOG_CONFIG = {
 const SECURITY_CONFIG = {
   PASSWORD_MIN_LENGTH: 6, // 密码最小长度
   BCRYPT_ROUNDS: 10, // bcrypt加密轮数
-  ENCRYPTION_KEY: process.env.ENCRYPTION_KEY || 'your-encryption-key', // AES加密密钥
+  ENCRYPTION_KEY: process.env.ENCRYPTION_KEY, // AES加密密钥（必须通过环境变量设置）
 };
 
 module.exports = {

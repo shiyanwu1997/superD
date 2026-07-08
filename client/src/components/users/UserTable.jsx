@@ -1,290 +1,264 @@
 import React, { useState } from 'react';
-import { Table, Tag, Space, Button, Popconfirm, Select, Tooltip, Avatar, message } from 'antd';
-import { KeyOutlined, DeleteOutlined, PlusOutlined, MinusOutlined } from '@ant-design/icons';
+import { Table, Tag, Space, Button, Popconfirm, Select, Tooltip, Avatar, message, Modal, Spin } from 'antd';
+import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { useAuth } from '../../contexts/AuthContext';
-import { updateUserPassword, updateUserCreatedBy, deleteUser, setUserProjectPermission, removeUserProjectPermission } from '../../utils/api';
+import { setUserProjectPermission, removeUserProjectPermission, addUserProgramPermission, removeUserProgramPermission, getUserProgramPermissions, getProgramsByProject, deleteUser, updateUserCreatedBy } from '../../utils/api';
 
 const UserTable = ({ users, projects, loading, onRoleChange, onUserUpdate, allUsers = [] }) => {
   const { user } = useAuth();
-  // 存储每个用户-项目组合的加载状态，格式：{ 'userId-projectId': true/false }
-  const [loadingPermissions, setLoadingPermissions] = useState({});
 
-  // 生成头像颜色
+  // 程序权限弹窗
+  const [programModalUser, setProgramModalUser] = useState(null);
+  const [programModalPerms, setProgramModalPerms] = useState([]);
+  const [programModalLoading, setProgramModalLoading] = useState(false);
+  const [selectedMachine, setSelectedMachine] = useState(null);
+  const [selectedPrograms, setSelectedPrograms] = useState([]);
+  const [machinePrograms, setMachinePrograms] = useState([]);
+  const [loadingPrograms, setLoadingPrograms] = useState(false);
+
   const getAvatarColor = (username) => {
     const colors = ['#f56a00', '#7265e6', '#ffbf00', '#00a2ae', '#8543e0'];
     const hash = username.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
     return colors[hash % colors.length];
   };
 
-  // 处理项目权限的添加/移除
-  const handlePermissionToggle = async (userId, projectId, projectName, isAdd) => {
-    // 设置加载状态
-    const key = `${userId}-${projectId}`;
-    setLoadingPermissions(prev => ({ ...prev, [key]: true }));
-    
+  // 打开程序权限弹窗
+  const openProgramModal = async (record) => {
+    setProgramModalUser(record);
+    setSelectedMachine(null);
+    setSelectedPrograms([]);
+    setMachinePrograms([]);
+    setProgramModalLoading(true);
+    try {
+      const perms = await getUserProgramPermissions(record.id);
+      setProgramModalPerms(perms || []);
+    } catch { setProgramModalPerms([]); }
+    setProgramModalLoading(false);
+  };
+
+  // 选择机器后加载程序列表
+  const handleMachineChange = async (pid) => {
+    setSelectedMachine(pid);
+    setSelectedPrograms([]);
+    if (!pid) { setMachinePrograms([]); return; }
+    setLoadingPrograms(true);
+    try {
+      const progs = await getProgramsByProject(pid);
+      setMachinePrograms(progs || []);
+    } catch { setMachinePrograms([]); }
+    setLoadingPrograms(false);
+  };
+
+  // 添加程序权限
+  const handleAddPrograms = async () => {
+    if (!selectedMachine || selectedPrograms.length === 0) return;
+    for (const name of selectedPrograms) {
+      try {
+        await addUserProgramPermission(programModalUser.id, `${selectedMachine}-${name}`);
+      } catch { /* continue */ }
+    }
+    const perms = await getUserProgramPermissions(programModalUser.id);
+    setProgramModalPerms(perms || []);
+    setSelectedPrograms([]);
+    message.success('已添加');
+  };
+
+  // 删除程序权限
+  const handleRemoveProgram = async (programId) => {
+    await removeUserProgramPermission(programModalUser.id, programId);
+    const perms = await getUserProgramPermissions(programModalUser.id);
+    setProgramModalPerms(perms || []);
+    message.success('已移除');
+  };
+
+  const handlePermissionToggle = async (userId, projectId, isAdd) => {
     try {
       if (isAdd) {
         await setUserProjectPermission(userId, projectId);
-        message.success(`已添加项目：${projectName}`);
+        message.success('机器权限已添加');
       } else {
         await removeUserProjectPermission(userId, projectId);
-        message.success(`已移除项目：${projectName}`);
+        message.success('机器权限已移除');
       }
-      onUserUpdate(); // 刷新数据
-    } catch (error) {
-      console.error('权限更新失败:', error);
-      message.error('权限更新失败');
-    } finally {
-      // 清除加载状态
-      setLoadingPermissions(prev => ({ ...prev, [key]: false }));
+      if (onUserUpdate) onUserUpdate();
+    } catch {
+      message.error('操作失败');
     }
   };
 
   const columns = [
-    { 
-      title: 'ID', 
-      dataIndex: 'id', 
-      key: 'id',
-      width: 60,
-      render: (id) => <span style={{ color: '#999' }}>{id}</span>
-    },
-    { 
-      title: '用户名', 
-      dataIndex: 'username', 
-      key: 'username',
-      render: (username) => (
-        <Space size="middle">
-          <Avatar style={{ backgroundColor: getAvatarColor(username) }} size="small">
-            {username.charAt(0).toUpperCase()}
+    {
+      title: '用户', key: 'user', width: 200,
+      render: (_, record) => (
+        <Space>
+          <Avatar style={{ backgroundColor: getAvatarColor(record.username) }} size="small">
+            {record.username?.[0]?.toUpperCase()}
           </Avatar>
-          <span style={{ fontWeight: 'bold' }}>{username}</span>
+          <span>{record.username}</span>
+          {Number(record.roleId) === 1 && <Tag color="red">admin</Tag>}
         </Space>
       )
     },
-    { 
-      title: '角色', 
-      dataIndex: 'roleId', 
-      key: 'roleId',
+    {
+      title: '角色', dataIndex: 'roleId', key: 'role', width: 120,
       render: (roleId, record) => {
-        // 只有超级管理员可以修改角色，且不能修改admin用户的角色
-        const canEditRole = Number(user?.roleId) === 1 && record.username !== 'admin';
-        
-        if (canEditRole) {
-          return (
-            <Select
-                value={roleId}
-                onChange={(newRoleId) => onRoleChange(record.id, newRoleId)}
-                style={{ width: 120 }}
-                size="small"
-              >
-              <Select.Option value={2}>普通管理员</Select.Option>
-              <Select.Option value={3}>普通用户</Select.Option>
-            </Select>
-          );
-        }
-        
-        // 静态角色标签显示
+        const isAdmin = Number(user?.roleId) === 1;
+        const isSelf = Number(user?.id) === Number(record.id);
+        const labels = { 1: '超级管理员', 2: '普通管理员', 3: '普通用户' };
+        if (!isAdmin || isSelf || record.username === 'admin') return <Tag>{labels[roleId] || roleId}</Tag>;
         return (
-          <Tag color={Number(roleId) === 1 ? 'blue' : Number(roleId) === 2 ? 'green' : 'default'}>
-            {Number(roleId) === 1 ? '超级管理员' : Number(roleId) === 2 ? '普通管理员' : '普通用户'}
-          </Tag>
+          <Select size="small" value={Number(roleId)} style={{ width: 110 }}
+            onChange={(val) => onRoleChange(record.id, val)}
+            options={[
+              { label: '普通管理员', value: 2 },
+              { label: '普通用户', value: 3 },
+            ]}
+          />
         );
       }
     },
-    { 
-      title: '上级管理员', 
-      dataIndex: 'createdBy', 
-      key: 'createdBy',
-      render: (createdBy, record) => {
-        // 超级管理员不显示上级管理员
-        if (Number(record.roleId) === 1) {
-          return '-';
-        }
-        
-        // 普通管理员默认上级是admin
-        if (Number(record.roleId) === 2) {
-          return 'admin';
-        }
-        
-        // 只有普通用户(roleId=3)显示上级管理员
-        if (Number(record.roleId) === 3) {
-          // 只有超级管理员可以修改上级管理员
-          if (Number(user?.roleId) === 1) {
-            return (
-              <Select
-                value={createdBy}
-                onChange={(newCreatedBy) => {
-                  updateUserCreatedBy(record.id, newCreatedBy)
-                    .then(() => {
-                      onUserUpdate();
-                    })
-                }}
-                style={{ width: 150 }}
-                size="small"
-                placeholder="选择上级管理员"
-              >
-                {(allUsers.length ? allUsers : users)
-                  .filter(u => Number(u.roleId) === 2)
-                  .map(u => <Select.Option key={u.id} value={u.id}>{u.username}</Select.Option>)}
-              </Select>
-            );
-          }
-          
-          // 其他角色只能查看，优先使用后端提供的createdByUsername
-          if (record.createdByUsername) {
-            return record.createdByUsername;
-          }
-          
-          // 如果createdByUsername不存在，尝试从完整用户列表中查找
-          const adminUser = (allUsers.length ? allUsers : users).find(u => u.id === createdBy);
-          if (adminUser) {
-            return adminUser.username;
-          }
-          
-          return '无';
-        }
-        return '-';
-
-      }
-    },
-    { 
-      title: '项目权限',
-      key: 'permissions',
+    {
+      title: '机器权限', key: 'machines', width: 320,
       render: (_, record) => {
         const userProjects = record.projectPermissions?.map(p => p.projectId) || [];
-        const projectCount = userProjects.length;
-        const hasAllPermissions = Number(record.roleId) === 1;
+        const hasAll = Number(record.roleId) === 1;
         const isAdmin = Number(user?.roleId) === 1 || Number(user?.roleId) === 2;
-        
-        if (hasAllPermissions) {
-          return <Tag color="blue">所有项目</Tag>;
-        }
-        
-        const assignedProjects = projects.filter(p => userProjects.includes(p.id));
-        const unassignedProjects = projects.filter(p => !userProjects.includes(p.id));
-        
-        // 已分配项目标签，可点击移除
-        const projectTags = assignedProjects.slice(0, 3).map(p => {
-          const key = `${record.id}-${p.id}`;
-          const isLoading = loadingPermissions[key];
-          return (
-            <Tag
-              key={p.id}
-              color="green"
-              style={{ margin: '2px' }}
-              closable={isAdmin && !isLoading}
-              onClose={() => handlePermissionToggle(record.id, p.id, p.name, false)}
-            >
-              {isLoading ? <span style={{ opacity: 0.7 }}>{p.name}...</span> : p.name}
-            </Tag>
-          );
-        });
-        
-        if (projectCount > 3) {
-          projectTags.push(
-            <Tag key="more" color="default" style={{ margin: '2px' }}>
-              +{projectCount - 3}
-            </Tag>
-          );
-        }
-        
-        // 显示添加项目权限的下拉菜单（仅管理员可见）
-        const addPermissionMenu = isAdmin && (
-          <div style={{ marginTop: 8 }}>
-            <Select
-              placeholder="添加项目权限"
-              style={{ width: '100%' }}
-              onChange={(value) => {
-                if (value) {
-                  const project = projects.find(p => p.id === value);
-                  if (project) {
-                    handlePermissionToggle(record.id, value, project.name, true);
-                  }
-                }
-              }}
-              showArrow
-              allowClear
-            >
-              {unassignedProjects.map(p => {
-                const key = `${record.id}-${p.id}`;
-                const isLoading = loadingPermissions[key];
-                return (
-                  <Select.Option key={p.id} value={p.id} disabled={isLoading}>
-                    {isLoading ? <span style={{ opacity: 0.7 }}>{p.name}...</span> : p.name}
-                  </Select.Option>
-                );
-              })}
-            </Select>
+        if (hasAll) return <Tag color="blue">全部机器</Tag>;
+
+        const assigned = projects.filter(p => userProjects.includes(p.id));
+        const unassigned = projects.filter(p => !userProjects.includes(p.id));
+
+        return (
+          <div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 2, marginBottom: 4 }}>
+              {assigned.length === 0 && <Tag color="default">无</Tag>}
+              {assigned.map(p => (
+                <Tag key={p.id} color="green" closable={isAdmin}
+                  onClose={() => handlePermissionToggle(record.id, p.id, false)}
+                >{p.name}</Tag>
+              ))}
+              {assigned.length > 0 && <span style={{ fontSize: 11, color: '#999' }}>({assigned.length}台)</span>}
+            </div>
+            {isAdmin && unassigned.length > 0 && (
+              <Select size="small" placeholder="+ 添加机器" style={{ width: '100%' }}
+                value={undefined}
+                onChange={(val) => { if (val) handlePermissionToggle(record.id, val, true); }}
+                options={unassigned.map(p => ({ label: p.name, value: p.id }))}
+              />
+            )}
+            {isAdmin && !hasAll && (
+              <div style={{ marginTop: 4 }}>
+                <Button size="small" type="link" style={{ padding: 0, fontSize: 12 }}
+                  onClick={() => openProgramModal(record)}
+                >程序权限</Button>
+              </div>
+            )}
           </div>
         );
-        
+      }
+    },
+    {
+      title: '上级', key: 'creator', width: 130,
+      render: (_, record) => {
+        if (Number(record.roleId) === 1) return <Tag color="red">-</Tag>;
+        const isSuperAdmin = Number(user?.roleId) === 1;
+        const parentAdmins = allUsers.filter(u => Number(u.roleId) === 1 || Number(u.roleId) === 2);
+        if (isSuperAdmin) {
+          return (
+            <Select size="small" style={{ width: 110 }}
+              value={record.createdBy || undefined}
+              placeholder="选择上级"
+              allowClear
+              onChange={async (val) => {
+                try {
+                  await updateUserCreatedBy(record.id, val || null);
+                  message.success('已更新');
+                  if (onUserUpdate) onUserUpdate();
+                } catch { message.error('更新失败'); }
+              }}
+              options={parentAdmins.map(u => ({ label: u.username, value: u.id }))}
+            />
+          );
+        }
+        return <span>{record.createdByUsername || '-'}</span>;
+      }
+    },
+    {
+      title: '操作', key: 'action', width: 100,
+      render: (_, record) => {
+        if (record.username === 'admin') return null;
         return (
-          <Tooltip title={assignedProjects.map(p => p.name).join(', ') || '无项目权限'}>
-            <div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center' }}>
-                {projectTags.length > 0 ? projectTags : <Tag color="default">无</Tag>}
-                <span style={{ color: '#999', fontSize: '12px', marginLeft: '4px' }}>
-                  ({projectCount}个项目)
-                </span>
-              </div>
-              {addPermissionMenu}
-            </div>
-          </Tooltip>
+          <Popconfirm title="确定删除此用户？" onConfirm={async () => {
+            await deleteUser(record.id);
+            message.success('已删除');
+            if (onUserUpdate) onUserUpdate();
+          }}>
+            <Button type="link" danger icon={<DeleteOutlined />} size="small" />
+          </Popconfirm>
         );
       }
-    },
-    { 
-      title: '创建时间', 
-      dataIndex: 'createdAt', 
-      key: 'createdAt',
-      render: (createdAt) => {
-        if (!createdAt) return '-';
-        const date = new Date(createdAt);
-        return date.toLocaleString();
-      }
-    },
-    { 
-      title: '操作', 
-      key: 'action',
-      width: 150,
-      render: (_, record) => (
-        <Space size="small">
-          <Button 
-            size="small" 
-            icon={<KeyOutlined />} 
-            onClick={() => {
-                const newPwd = prompt(`请输入用户 ${record.username} 的新密码:`);
-                if(newPwd) updateUserPassword(record.id, newPwd).then(() => {
-                  onUserUpdate();
-                });
-            }}
-          >
-            改密
-          </Button>
-          {record.username !== 'admin' && (
-            <Popconfirm title="确认删除?" onConfirm={async () => {
-                await deleteUser(record.id);
-                onUserUpdate();
-            }}>
-              <Button danger size="small" icon={<DeleteOutlined />}>删除</Button>
-            </Popconfirm>
-          )}
-        </Space>
-      )
     }
   ];
 
   return (
-    <Table 
-      columns={columns} 
-      dataSource={users} 
-      rowKey="id" 
-      loading={loading}
-      pagination={{ pageSize: 10 }}
-      bordered
-      size="middle"
-      scroll={{ x: 1000 }}
-    />
+    <>
+      <Table dataSource={users} columns={columns} rowKey="id" loading={loading}
+        pagination={false} size="small" scroll={{ x: 800 }} />
+
+      {/* 程序权限弹窗 */}
+      <Modal
+        title={`程序权限 - ${programModalUser?.username || ''}`}
+        open={!!programModalUser}
+        onCancel={() => setProgramModalUser(null)}
+        footer={null}
+        width={600}
+      >
+        {programModalLoading ? <Spin /> : (
+          <>
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontWeight: 500, marginBottom: 8 }}>已授权的程序：</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                {programModalPerms.length === 0 && <Tag color="default">无</Tag>}
+                {programModalPerms.map(p => (
+                  <Tag key={p.programId} color="orange" closable
+                    onClose={() => handleRemoveProgram(p.programId)}
+                  >{p.programId}</Tag>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: 16 }}>
+              <div style={{ fontWeight: 500, marginBottom: 8 }}>新增程序权限：</div>
+              <Space>
+                <Select style={{ width: 180 }} placeholder="1. 选择机器"
+                  value={selectedMachine}
+                  onChange={handleMachineChange}
+                  allowClear
+                  options={projects.map(p => ({ label: p.name, value: p.id }))}
+                />
+                <Select style={{ width: 220 }} placeholder="2. 选择程序（可多选）"
+                  mode="multiple"
+                  value={selectedPrograms}
+                  onChange={setSelectedPrograms}
+                  loading={loadingPrograms}
+                  disabled={!selectedMachine}
+                  options={machinePrograms
+                    .filter(p => !programModalPerms.some(perm => perm.programId === `${selectedMachine}-${p.name}`))
+                    .map(p => ({ label: p.name, value: p.name }))}
+                  showSearch
+                  filterOption={(input, option) => (option?.label || '').toLowerCase().includes(input.toLowerCase())}
+                  notFoundContent={selectedMachine ? '无程序' : '请先选机器'}
+                />
+                <Button type="primary" icon={<PlusOutlined />}
+                  disabled={!selectedMachine || selectedPrograms.length === 0}
+                  onClick={handleAddPrograms}
+                >添加</Button>
+              </Space>
+            </div>
+          </>
+        )}
+      </Modal>
+    </>
   );
 };
 

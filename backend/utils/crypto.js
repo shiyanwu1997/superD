@@ -1,9 +1,8 @@
 const crypto = require('crypto');
 const { SECURITY_CONFIG } = require('../config');
 
-// 生成加密密钥和IV
-// 注意：在生产环境中，这些应该存储在环境变量或密钥管理服务中
-const ENCRYPTION_KEY = crypto.createHash('sha256').update(SECURITY_CONFIG.ENCRYPTION_KEY || 'your-encryption-key').digest('base64').substring(0, 32);
+// 使用 SHA-256 派生 32 字节密钥（AES-256-CBC 所需长度）
+const ENCRYPTION_KEY = crypto.createHash('sha256').update(SECURITY_CONFIG.ENCRYPTION_KEY).digest();
 const IV_LENGTH = 16; // AES块大小为16字节
 
 /**
@@ -19,7 +18,7 @@ function encrypt(text) {
     const iv = crypto.randomBytes(IV_LENGTH);
     
     // 创建加密器
-    const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY), iv);
+    const cipher = crypto.createCipheriv('aes-256-cbc', ENCRYPTION_KEY, iv);
     
     // 加密文本
     let encrypted = cipher.update(text, 'utf8', 'base64');
@@ -52,7 +51,7 @@ function decrypt(encryptedText) {
     const encryptedTextBuffer = encryptedBuffer.slice(IV_LENGTH);
     
     // 创建解密器
-    const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY), iv);
+    const decipher = crypto.createDecipheriv('aes-256-cbc', ENCRYPTION_KEY, iv);
     
     // 解密文本
     let decrypted = decipher.update(encryptedTextBuffer, 'base64', 'utf8');

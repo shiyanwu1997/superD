@@ -1,34 +1,21 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ConfigProvider } from 'antd';
+import ErrorBoundary from './components/ErrorBoundary';
 import LoginPage from './pages/LoginPage';
 import ProgramsPage from './pages/ProgramsPage';
-import ProgramDetailPage from './pages/ProgramDetailPage';
 import UsersPage from './pages/UsersPage';
 import './App.css';
 
-// 创建QueryClient实例
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      refetchOnWindowFocus: true,
-      retry: 1,
-    },
-  },
-});
-
-// 主应用组件
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
+    <ErrorBoundary>
       <ConfigProvider>
         <AuthProvider>
-          {/* 使用AuthWrapper组件来确保在AuthContext内部使用useAuth */}
           <AuthWrapper />
         </AuthProvider>
       </ConfigProvider>
-    </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
 
@@ -64,12 +51,8 @@ const AuthWrapper = () => {
           <ProgramsPage />
         </ProtectedRoute>
       } />
-      <Route path="/programs/:projectId/:programId" element={
-        <ProtectedRoute>
-          <ProgramDetailPage />
-        </ProtectedRoute>
-      } />
-      
+      {/* ProgramDetailPage 通过 ProgramsPage 弹窗打开，不需要独立路由 */}
+
       {/* 用户管理页面 - 已改为模态窗口，不再使用单独路由 */}
       {/* <Route path="/users" element={
         <ProtectedRoute>

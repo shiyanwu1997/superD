@@ -1,264 +1,242 @@
-# Supervisor 进程管理平台
+# SuperD — Supervisor 进程管理平台
 
-## 项目简介
-
-Supervisor 是一个功能强大的进程管理平台，基于 Supervisor 的进程管理功能，提供了友好的 Web 界面，方便运维和开发人员管理和监控通过 Supervisor 运行的程序。该平台支持多项目管理、程序状态监控、日志查看、批量操作等功能，并实现了完善的角色权限管理系统。
+基于 Web 的 Supervisor 进程管理面板，替代命令行 `supervisorctl`，通过浏览器管理多台服务器上的进程。
 
 ## 技术栈
 
-### 前端
-- React 18
-- Vite 7
-- React Router 7
-- Ant Design 5
-- Socket.io-client 4.8.3
-- @tanstack/react-query
-- @xterm/xterm 6.0.0
-
-### 后端
-- Node.js
-- Express 5.2.1
-- Socket.io 4.8.3
-- JWT 认证
-- bcrypt 密码加密
-- MySQL2 3.16.0
-- xmlrpc 1.3.2
-
-### 数据库
-- MySQL 数据库（生产环境推荐）
+| 层级 | 技术 |
+|------|------|
+| 前端 | React 18, Vite 7, Ant Design 5, React Router 7, xterm.js 6, Socket.io-client, TanStack Query |
+| 后端 | Node.js, Express 5, Socket.io 4, JWT + Session 认证, bcrypt, xmlrpc, helmet |
+| 存储 | **SQLite**（默认，零配置）/ MySQL（可选，生产环境推荐） |
+| 部署 | PM2 + ecosystem.config.js |
 
 ## 功能特性
 
-### 1. 角色权限管理系统 (RBAC)
-- 基于角色的访问控制，分为三个层级：
-  - **超级管理员**：仅admin用户可拥有此角色，拥有所有项目和用户的管理权限
-  - **普通管理员**：可以创建普通用户，管理自己创建的用户和授权的项目
-  - **普通用户**：无用户管理权限，只能访问被授权的项目和程序
-- 权限动态检查，确保用户只能访问授权资源
-- 用户密码使用 bcrypt 加密存储
+### 进程管理
+- 实时监控程序状态（RUNNING / STOPPED / FATAL / BACKOFF）
+- 单个操作：启动、停止、重启
+- 批量操作：启动全部、停止全部、重启全部
+- 项目筛选器：查看所有项目 / 指定项目的机器
 
-### 2. 项目管理
-- 项目列表展示，基于用户权限过滤
-- 项目连接状态实时显示（在线/离线/检查中）
-- 支持多项目管理，可切换查看不同项目的程序
-- Supervisor 密码使用 AES-256 加密存储
+### 日志管理
+- **WebSocket 实时推送**（非轮询），即时显示 stdout / stderr
+- xterm.js 终端模拟，支持彩色输出、自动滚动
+- 自适应降频：无新日志时自动降低推送频率
 
-### 3. 程序管理
-- 实时监控程序运行状态（运行中、已停止、启动中、异常等）
-- 单个程序操作：启动、停止、重启
-- 批量操作：启动所有、停止所有、重启所有程序
-- 程序搜索功能，快速定位目标程序
+### 权限系统 (RBAC)
+- **三级角色**：超级管理员 → 普通管理员 → 普通用户
+- **细粒度授权**：
+  - 项目级：用户可操作该服务器上**全部机器**
+  - 程序级：用户仅能操作**指定机器**（程序级优先，项目级兜底）
 
-### 4. 日志管理
-- 支持查看标准输出日志（stdout）和标准错误日志（stderr）
-- 实时日志更新，支持自动滚动查看
-- 日志终端化展示，提供更好的阅读体验
-- 支持大量日志的高效加载和显示
+### 安全
+- JWT + Session 双重认证
+- bcrypt 密码哈希，AES-256 加密 Supervisor 密码
+- helmet 安全头，CORS 白名单
+- 登录接口速率限制（5次/分钟/IP）
+- 所有密钥通过环境变量注入，无硬编码
 
-### 5. 用户管理
-- 用户列表展示，支持按角色过滤
-- 支持创建、删除、修改用户信息
-- 支持修改用户密码
-- 支持查看用户创建的历史记录
+### 双存储引擎
+- **默认 SQLite**：开箱即用，无需安装数据库
+- **可选 MySQL**：设置 `STORAGE_TYPE=mysql` 切换，适合生产环境
 
-## 安装与使用
+## 快速开始
 
-### 环境要求
-- Node.js 16+
-- npm 或 yarn
-- MySQL 数据库（生产环境推荐）
-- Supervisor 已安装并运行
+### 1. 安装依赖
 
-### 安装步骤
-
-1. 克隆项目
 ```bash
-git clone <项目地址>
-cd supervisor-v1
+cd backend && npm install
+cd ../client && npm install
 ```
 
-2. 安装依赖
+### 2. 配置密钥
+
 ```bash
-# 安装所有依赖
-npm run install-all
+cd backend
+cp .env.example .env
+vim .env    # 修改三个必填密钥
 ```
 
-3. 配置环境变量
+`.env` 文件内容：
 
-#### 后端配置
-在 `backend` 目录下创建 `.env` 文件，配置以下环境变量：
-```env
-PORT=3000
-STORAGE_TYPE=mysql
-SESSION_SECRET=your_session_secret
-JWT_SECRET=your_jwt_secret
-
-# MySQL 数据库配置
-MYSQL_HOST=127.0.0.1
-MYSQL_PORT=3306
-MYSQL_USER=root
-MYSQL_PASSWORD=your_password
-MYSQL_DATABASE=supervisor
-
-# AES 加密密钥（用于加密Supervisor密码）
-ENCRYPTION_KEY=your_encryption_key
+```ini
+SESSION_SECRET=请生成一个随机字符串
+JWT_SECRET=请生成另一个随机字符串
+ENCRYPTION_KEY=请生成一个32字节长度的密钥
 ```
 
-#### 前端配置
-在 `client` 目录下创建 `.env` 文件，配置以下环境变量：
-```env
-VITE_API_URL=http://localhost:3000
-```
+> 应用启动时通过 `dotenv` 自动加载 `backend/.env`，无需手动 export。SQLite 模式下以上三个即可启动。
 
-**说明**：
-- `VITE_API_URL` 是前端访问后端API的基础URL
-- 默认值 `http://localhost:3000` 是后端服务的默认地址和端口
-- 前端会自动在这个URL后面添加 `/api` 路径作为API的基础路径
-- 如果后端服务运行在不同的地址或端口，需要相应修改此配置
+### 3. 启动
 
-### 启动方式
-
-#### 开发环境
 ```bash
-# 启动后端开发服务器
-npm run dev
+# 开发模式
+cd backend && npm run dev    # 后端 → http://localhost:3000
+cd client && npm run dev     # 前端 → http://localhost:5173
 
-# 启动前端开发服务器
-npm run dev
+# 生产模式
+cd client && npm run build   # 构建前端
+pm2 start ecosystem.config.js   # PM2 启动双服务
 ```
 
-#### 生产环境
-```bash
-# 构建前端
-npm run build
+### 4. 首次登录
 
-# 使用 PM2 启动（推荐）
-pm2 start ecosystem.config.js
+首次启动会自动创建数据库表和内置角色，并生成随机密码的管理员账号：
+
 ```
+=== 默认管理员用户已创建 ===
+用户名: admin
+密码: <随机生成>
+```
+
+> 查看密码: `pm2 logs supervisor-backend | grep "密码"`
 
 ## 项目结构
 
 ```
-supervisor-v1/
-├── backend/               # 后端代码
-│   ├── logs/              # 日志文件
-│   ├── middleware/        # 中间件
-│   │   └── auth.js        # 认证中间件
-│   ├── models/            # 数据模型
-│   │   ├── db.js          # 数据库操作封装
-│   │   └── db.mysql.js    # MySQL 数据库实现
-│   ├── routes/            # 后端路由
-│   │   └── index.js       # 路由配置
-│   ├── services/          # 业务逻辑
-│   │   ├── socketServer.js# Socket.IO 实时通信服务
-│   │   └── supervisorService.js # Supervisor 服务封装
-│   ├── utils/             # 工具函数
-│   │   ├── crypto.js      # AES 加密工具
-│   │   ├── errors.js      # 错误处理
-│   │   └── logger.js      # 日志工具
-│   ├── app.js             # 后端入口
-│   ├── config.js          # 配置文件
-│   └── init-db.js         # 数据库初始化脚本
-├── client/                # 前端代码
-│   ├── dist/              # 构建输出
-│   ├── public/            # 公共资源
-│   ├── src/               # 源代码
-│   │   ├── components/    # 组件
-│   │   ├── contexts/      # React 上下文
-│   │   ├── pages/         # 页面组件
-│   │   ├── utils/         # 工具函数
-│   │   ├── App.jsx        # 应用入口
-│   │   └── main.jsx       # 主入口文件
-│   ├── index.html         # HTML 模板
-│   └── vite.config.js     # Vite 配置
-├── ecosystem.config.js    # PM2 配置文件
-└── README.md              # 项目说明文档
+superD/
+├── backend/
+│   ├── app.js                     # Express 入口 + 中间件链
+│   ├── config.js                  # 全局配置
+│   ├── init-db.js                 # 建表脚本 (SQLite + MySQL)
+│   ├── routes/
+│   │   ├── index.js               # 路由挂载
+│   │   ├── auth.js                # 登录 / 登出 / 用户信息
+│   │   ├── projects.js            # 项目 CRUD + 连接状态
+│   │   ├── programs.js            # 进程列表 / 操作 / 日志
+│   │   └── users.js               # 用户管理 / 权限分配
+│   ├── middleware/
+│   │   └── auth.js                # JWT 验证 + 角色检查
+│   ├── models/
+│   │   ├── db.js                  # 存储选择器 (sqlite | mysql)
+│   │   ├── db.sqlite.js           # SQLite 实现 (25 方法)
+│   │   └── db.mysql.js            # MySQL 实现 (25 方法)
+│   ├── services/
+│   │   ├── supervisorService.js   # XML-RPC 与 Supervisor 通信
+│   │   └── socketServer.js        # WebSocket 实时日志推送
+│   └── utils/
+│       ├── crypto.js              # AES-256 加解密
+│       ├── errors.js              # 统一错误处理 (ApiError + 404)
+│       ├── logger.js              # 分级日志工具 (DEBUG/INFO/WARN/ERROR)
+│       └── programId.js           # programId 解析工具
+│
+├── client/
+│   └── src/
+│       ├── App.jsx                # 根组件 + 路由定义
+│       ├── main.jsx               # 入口 + QueryClient + BrowserRouter
+│       ├── config.js              # 前端配置 (终端/WebSocket)
+│       ├── pages/
+│       │   ├── LoginPage.jsx      # 登录页
+│       │   ├── ProgramsPage.jsx   # 主面板 (项目侧栏 + 进程表格 + 操作)
+│       │   ├── ProgramDetailPage.jsx  # 进程详情 + 日志抽屉
+│       │   └── UsersPage.jsx      # 用户管理弹窗
+│       ├── components/
+│       │   ├── LogTerminal.jsx    # xterm 终端 (Socket.io 实时日志)
+│       │   ├── StatsCards.jsx     # 统计卡片 (总数/运行/停止/异常)
+│       │   ├── ErrorBoundary.jsx  # React 错误边界
+│       │   ├── modals/            # 项目管理 / 修改密码弹窗
+│       │   └── users/             # 用户管理子组件
+│       ├── contexts/
+│       │   └── AuthContext.jsx    # 认证上下文
+│       └── utils/
+│           └── api.js             # 28 个 API 封装函数
+│
+├── ecosystem.config.js            # PM2 部署配置 (含日志轮转)
+└── package.json                   # monorepo 脚本
 ```
 
-## API 接口
+## API 端点 (34个)
 
-### 认证相关
-- `POST /api/login` - 用户登录，返回JWT令牌
-- `GET /api/user` - 获取当前用户信息
+### 认证
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/login` | 用户登录（速率限制 5次/分） |
+| GET | `/logout` | 退出登录 |
+| GET | `/api/user` | 获取当前用户信息 |
 
-### 项目相关
-- `GET /api/projects` - 获取项目列表（基于当前用户权限）
-- `GET /api/projects/:projectId/status` - 检查项目连接状态
-- `POST /api/projects` - 创建新项目（需要管理员权限）
-- `PUT /api/projects/:id` - 更新项目信息（需要管理员权限）
-- `DELETE /api/projects/:id` - 删除项目（需要管理员权限）
+### 项目管理
+| 方法 | 路径 | 权限 |
+|------|------|------|
+| GET | `/api/projects` | 用户可访问的项目列表 |
+| POST | `/api/projects` | 管理员 |
+| PUT | `/api/projects/:id` | 管理员 |
+| DELETE | `/api/projects/:id` | 管理员 |
+| GET | `/api/projects/:id/status` | 检查 Supervisor 连接状态 |
 
-### 程序相关
-- `GET /api/projects/:projectId/programs` - 获取项目下的程序列表
-- `GET /api/programs/:programId` - 获取程序详情
-- `POST /api/programs/:programId/start` - 启动程序
-- `POST /api/programs/:programId/stop` - 停止程序
-- `POST /api/programs/:programId/restart` - 重启程序
+### 进程管理
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/projects/:id/programs` | 项目下进程列表 |
+| GET | `/api/programs` | 所有项目进程汇总 |
+| GET | `/api/programs/:id` | 进程详情 + 日志 |
+| GET | `/api/programs/:id/stdout` | 标准输出日志 |
+| GET | `/api/programs/:id/stderr` | 标准错误日志 |
+| POST | `/api/programs/:id/start` | 启动进程 |
+| POST | `/api/programs/:id/stop` | 停止进程 |
+| POST | `/api/programs/:id/restart` | 重启进程 |
 
 ### 批量操作
-- `POST /api/projects/:projectId/programs/start-all` - 启动所有程序
-- `POST /api/projects/:projectId/programs/stop-all` - 停止所有程序
-- `POST /api/projects/:projectId/programs/restart-all` - 重启所有程序
-
-### 日志相关
-- `GET /api/programs/:programId/stdout` - 获取标准输出日志
-- `GET /api/programs/:programId/stderr` - 获取标准错误日志
-- **Socket.IO** - 实时日志推送
+| 方法 | 路径 |
+|------|------|
+| POST | `/api/projects/:id/programs/start-all` |
+| POST | `/api/projects/:id/programs/stop-all` |
+| POST | `/api/projects/:id/programs/restart-all` |
 
 ### 用户管理
-- `GET /api/users` - 获取用户列表（基于当前用户权限）
-- `POST /api/users` - 创建新用户（需要管理员权限）
-- `DELETE /api/users/:userId` - 删除用户（需要管理员权限）
-- `PUT /api/users/:userId/role` - 更新用户角色（需要管理员权限）
-- `PUT /api/users/self/password` - 修改当前用户密码
-- `PUT /api/users/:userId/password` - 修改指定用户密码（需要管理员权限）
-- `GET /api/roles` - 获取所有角色
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/users` | 用户列表 |
+| POST | `/api/users` | 创建用户 |
+| DELETE | `/api/users/:id` | 删除用户 |
+| PUT | `/api/users/:id/role` | 修改角色 |
+| PUT | `/api/users/:id/password` | 修改密码 |
+| PUT | `/api/users/self/password` | 修改自己的密码 |
+| PUT | `/api/users/:id/createdBy` | 修改上级管理员 |
+| GET | `/api/roles` | 角色列表 |
 
-## 安全特性
+### 权限管理
+| 方法 | 路径 | 粒度 |
+|------|------|------|
+| GET | `/api/users/:id/project-permissions` | 项目级 |
+| POST | `/api/users/:id/project-permissions` | 项目级 |
+| DELETE | `/api/users/:id/project-permissions/:pid` | 项目级 |
+| GET | `/api/users/:id/program-permissions` | 程序级 |
+| POST | `/api/users/:id/program-permissions` | 程序级 |
+| DELETE | `/api/users/:id/program-permissions/:pid` | 程序级 |
 
-1. **用户认证与授权**
-   - JWT 令牌认证
-   - 基于角色的访问控制 (RBAC)
-   - 密码使用 bcrypt 加密存储
+## 环境变量
 
-2. **数据加密**
-   - Supervisor 密码使用 AES-256 加密存储
-   - 加密密钥通过环境变量配置
+| 变量 | 必填 | 说明 |
+|------|------|------|
+| `SESSION_SECRET` | 是 | Session 加密密钥 |
+| `JWT_SECRET` | 是 | JWT 签名密钥 |
+| `ENCRYPTION_KEY` | 是 | AES-256 加密密钥（Supervisor 密码加密） |
+| `STORAGE_TYPE` | 否 | `sqlite`（默认）或 `mysql` |
+| `PORT` | 否 | 后端端口，默认 3000 |
+| `MYSQL_HOST` | MySQL 必填 | MySQL 主机 |
+| `MYSQL_PORT` | 否 | MySQL 端口，默认 3306 |
+| `MYSQL_USER` | 否 | MySQL 用户名，默认 root |
+| `MYSQL_PASSWORD` | MySQL 必填 | MySQL 密码 |
+| `MYSQL_DATABASE` | 否 | 数据库名，默认 supervisor |
 
-3. **通信安全**
-   - CORS 配置限制允许的前端域名
-   - 所有 API 请求均需认证
+## 与 Supervisor 的通信
 
-4. **输入验证**
-   - 所有用户输入均经过验证
-   - SQL 注入防护
+```
+浏览器 ←→ Express API ←→ XML-RPC ←→ Supervisor (:9001)
+                                   ├─ supervisor.getAllProcessInfo
+                                   ├─ supervisor.startProcess
+                                   ├─ supervisor.stopProcess
+                                   ├─ supervisor.tailProcessStdoutLog
+                                   └─ supervisor.tailProcessStderrLog
+```
+
+每个项目在数据库存储对应的 Supervisor 连接信息（host/port/user/password），后端通过 XML-RPC 协议与目标 Supervisor 实例通信。
 
 ## 注意事项
 
-1. **首次启动**
-   - 首次启动会自动创建数据库和表结构
-   - 首次启动会自动生成超级管理员账号，账号信息将在日志中显示
-
-2. **Supervisor 配置**
-   - 确保 Supervisor 服务已在后台运行
-   - 确保 Supervisor 配置允许远程访问
-   - 配置文件通常位于 `/etc/supervisor/supervisord.conf`
-
-3. **生产环境**
-   - 确保使用 HTTPS
-   - 定期更新依赖包
-   - 配置合适的日志级别
-
-## 开发说明
-
-### 代码风格
-- 前端使用 ESLint 检查代码风格
-- 后端使用标准的 Node.js 代码风格
-
-### 测试
-- 后端提供了数据库测试文件
-- 建议为新功能编写测试用例
-
-## 许可证
-
-ISC
+1. **首次启动**自动创建数据库表 + 管理员账号
+2. **SQLite 数据库文件**位于 `backend/data/supervisor.db`
+3. **Supervisor 需开启 XML-RPC**，配置 `[inet_http_server]` 段
+4. **生产部署**建议使用 MySQL + PM2 + HTTPS 反向代理
+5. 前端代理配置在 `vite.config.js`，生产环境需 Nginx 反向代理 `/api` 和 `/socket.io`

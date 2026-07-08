@@ -1,19 +1,13 @@
 const { Server } = require('socket.io');
 const { getProcessStdoutLog, getProcessStderrLog, callRpc } = require('./supervisorService');
+const Logger = require('../utils/logger');
 
 class SocketServer {
   constructor(server) {
     this.io = new Server(server, {
       path: '/socket.io',
       cors: {
-        origin: function(origin, callback) {
-          // 允许本地开发环境的所有请求
-          if (!origin || origin.startsWith('http://localhost:')) {
-            callback(null, true);
-          } else {
-            callback(new Error('Not allowed by CORS'));
-          }
-        },
+        origin: true,
         credentials: true,
         methods: ['GET', 'POST']
       },
@@ -29,7 +23,7 @@ class SocketServer {
   
   initialize() {
     this.io.on('connection', (socket) => {
-      console.log(`Socket connected: ${socket.id}`);
+      Logger.debug(`Socket connected: ${socket.id}`);
       this.connections.set(socket.id, {
         socket: socket,
         programId: null,
@@ -49,7 +43,7 @@ class SocketServer {
       });
       
       socket.on('disconnect', () => {
-        console.log(`Socket disconnected: ${socket.id}`);
+        Logger.debug(`Socket disconnected: ${socket.id}`);
         this.stopLogTail(socket.id);
         this.connections.delete(socket.id);
       });
@@ -116,7 +110,7 @@ class SocketServer {
             processInfo.stderr_logfile_size || 0;
           connection.offset = logFileSize;
         } catch (error) {
-          console.error(`获取进程信息失败 (${programName}):`, error);
+          Logger.error(`获取进程信息失败 (${programName}):`, error);
           // 如果获取失败，使用-1作为初始偏移量，确保只获取最新日志
           connection.offset = -1;
         }
@@ -176,7 +170,7 @@ class SocketServer {
           }, 10000); // 减少轮询间隔：每10秒获取一次日志
           this.timers.set(socketId, timerId);
           connection.isReducedInterval = true;
-          // console.log(`已减少日志轮询频率: ${connection.programId} (${connection.logType})`);
+          Logger.debug(`已减少日志轮询频率: ${connection.programId} (${connection.logType})`);
         } else if (connection.emptyLogCount < 5) {
           // 仍然发送空日志块，让前端知道没有日志内容
           connection.socket.emit('log_chunk', {
@@ -188,7 +182,7 @@ class SocketServer {
       }
       
     } catch (error) {
-      console.error(`Error fetching logs for ${connection.programId} (${connection.logType}):`, error.message);
+      Logger.error(`Error fetching logs for ${connection.programId} (${connection.logType}):`, error);
       // 如果是NO_FILE错误，不发送错误信息，因为这是正常情况
       if (!error.message.includes('NO_FILE')) {
         connection.socket.emit('log_error', {
