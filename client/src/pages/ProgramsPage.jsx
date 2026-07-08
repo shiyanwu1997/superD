@@ -440,52 +440,30 @@ const ProgramsPage = () => {
           collapsed={collapsed}
           width={280}
           style={{
-            boxShadow: '2px 0 12px rgba(0,0,0,.15)', zIndex: 10,
-            backgroundColor: 'var(--sidebar, #0f172a)', borderRight: 'none'
+            boxShadow: '1px 0 0 0 var(--border)', zIndex: 10,
+            backgroundColor: '#fff', borderRight: 'none'
           }}
         >
           <div style={{
-            height: 64, display: 'flex', alignItems: 'center', padding: '0 20px',
-            borderBottom: '1px solid rgba(255,255,255,.06)'
+            height: 56, display: 'flex', alignItems: 'center', padding: '0 20px',
+            borderBottom: '1px solid var(--border)'
           }}>
             <div style={{
-              width: 34, height: 34, borderRadius: 9,
-              background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: 12
+              width: 32, height: 32, borderRadius: 8,
+              background: 'var(--accent)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: 10
             }}>
-              <ClusterOutlined style={{ fontSize: 18, color: '#fff' }} />
+              <ClusterOutlined style={{ fontSize: 16, color: '#fff' }} />
             </div>
-            {!collapsed && <span style={{ fontWeight: 700, fontSize: 18, color: '#f1f5f9', letterSpacing: '-.3px' }}>Supervisor</span>}
+            {!collapsed && <span style={{ fontWeight: 600, fontSize: 17, color: 'var(--text)' }}>Supervisor</span>}
           </div>
 
           <div style={{
             padding: '16px 16px 12px', display: collapsed ? 'none' : 'block',
-            borderBottom: '1px solid rgba(255,255,255,.06)'
+            borderBottom: '1px solid #e5e7eb'
           }}>
-            <style>{`
-              .sidebar-search.ant-input-search .ant-input {
-                background: rgba(255,255,255,.08) !important;
-                border: none !important;
-                color: #e2e8f0 !important;
-                border-radius: 8px !important;
-              }
-              .sidebar-search.ant-input-search .ant-input::placeholder {
-                color: #64748b !important;
-              }
-              .sidebar-search.ant-input-search .ant-input-search-button {
-                background: transparent !important;
-                border: none !important;
-                color: #64748b !important;
-              }
-              .tree-item-hover:hover {
-                background: rgba(255,255,255,.06) !important;
-              }
-              .tree-group-hover:hover {
-                background: rgba(255,255,255,.08) !important;
-              }
-            `}</style>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1 }}>机器列表 ({filteredProjects.length})</span>
+              <span style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 1 }}>机器列表 ({filteredProjects.length})</span>
               {user?.roleId === 1 && (
                 <Tooltip title="管理机器">
                   <Button
@@ -494,7 +472,7 @@ const ProgramsPage = () => {
                     icon={<SettingOutlined />}
                     onClick={() => setShowProjectModal(true)}
                     style={{
-                      color: '#818cf8',
+                      color: '#6b7280',
                       fontSize: '14px',
                       fontWeight: '500'
                     }}
@@ -510,7 +488,6 @@ const ProgramsPage = () => {
               size="middle"
               value={projectSearchText}
               onChange={(e) => setProjectSearchText(e.target.value)}
-              className="sidebar-search"
               style={{ width: '100%' }}
             />
           </div>
@@ -519,13 +496,12 @@ const ProgramsPage = () => {
           <div style={{ height: 'calc(100% - 128px)', overflow: 'auto', padding: '0 8px' }}>
             <div
               onClick={() => { navigate('/programs'); }}
-              className="tree-item-hover"
               style={{
                 padding: '10px 12px', cursor: 'pointer', borderRadius: 6, marginBottom: 4,
                 fontSize: 14, display: 'flex', alignItems: 'center', gap: 8,
-                background: !projectId ? 'rgba(99,102,241,.15)' : 'transparent',
+                background: !projectId ? '#eff6ff' : 'transparent',
                 fontWeight: !projectId ? 600 : 400,
-                color: !projectId ? '#818cf8' : '#cbd5e1'
+                color: !projectId ? '#2563eb' : '#374151'
               }}>
               <AppstoreOutlined /> 全部机器 ({projects.length})
             </div>
@@ -537,29 +513,27 @@ const ProgramsPage = () => {
                 <div key={g.id} style={{ marginBottom: 4 }}>
                   <div
                     onClick={() => setExpandedGroups(prev => ({ ...prev, [g.id]: !isExpanded }))}
-                    className="tree-group-hover"
                     style={{
                       padding: '8px 12px', cursor: 'pointer', borderRadius: 6,
-                      fontWeight: 500, fontSize: 13, color: '#94a3b8',
+                      fontWeight: 500, fontSize: 13, color: '#6b7280',
                       display: 'flex', alignItems: 'center', gap: 6, userSelect: 'none',
-                      background: 'rgba(255,255,255,.04)'
+                      background: '#f9fafb'
                     }}>
                     <span style={{ fontSize: 10 }}>{isExpanded ? '▼' : '▶'}</span>
                     📁 {g.name}
-                    <span style={{ fontSize: 11, color: '#64748b', marginLeft: 'auto' }}>{g.machineCount}台</span>
+                    <span style={{ fontSize: 11, color: '#9ca3af', marginLeft: 'auto' }}>{g.machineCount}台</span>
                   </div>
                   {isExpanded && groupProjects
                     .filter(p => !projectSearchText || p.name.includes(projectSearchText))
                     .map(p => (
                       <div key={p.id}
                         onClick={() => navigate(`/programs/${p.id}`)}
-                        className="tree-item-hover"
                         style={{
                           padding: '8px 12px 8px 32px', cursor: 'pointer', borderRadius: 4, margin: '1px 0',
                           fontSize: 13, display: 'flex', alignItems: 'center', gap: 8,
-                          color: projectId === String(p.id) ? '#e2e8f0' : '#cbd5e1',
-                          background: projectId === String(p.id) ? 'rgba(99,102,241,.12)' : 'transparent',
-                          borderLeft: projectId === String(p.id) ? '3px solid #818cf8' : '3px solid transparent'
+                          color: projectId === String(p.id) ? '#1e40af' : '#4b5563',
+                          background: projectId === String(p.id) ? '#eff6ff' : 'transparent',
+                          borderLeft: projectId === String(p.id) ? '3px solid #2563eb' : '3px solid transparent'
                         }}>
                         <span style={{
                           width: 8, height: 8, borderRadius: '50%', display: 'inline-block', flexShrink: 0,
@@ -575,17 +549,16 @@ const ProgramsPage = () => {
 
             {filteredProjects.filter(p => !p.groupId).length > 0 && (
               <div style={{ marginTop: 8 }}>
-                <div style={{ padding: '8px 12px', fontSize: 12, color: '#94a3b8', fontWeight: 500 }}>未分组</div>
+                <div style={{ padding: '8px 12px', fontSize: 12, color: '#9ca3af', fontWeight: 500 }}>未分组</div>
                 {filteredProjects.filter(p => !p.groupId).map(p => (
                   <div key={p.id}
                     onClick={() => navigate(`/programs/${p.id}`)}
-                    className="tree-item-hover"
                     style={{
                       padding: '8px 12px', cursor: 'pointer', borderRadius: 4, margin: '1px 0',
                       fontSize: 13, display: 'flex', alignItems: 'center', gap: 8,
-                      color: projectId === String(p.id) ? '#e2e8f0' : '#cbd5e1',
-                      background: projectId === String(p.id) ? 'rgba(99,102,241,.12)' : 'transparent',
-                      borderLeft: projectId === String(p.id) ? '3px solid #818cf8' : '3px solid transparent'
+                      color: projectId === String(p.id) ? '#1e40af' : '#4b5563',
+                      background: projectId === String(p.id) ? '#eff6ff' : 'transparent',
+                      borderLeft: projectId === String(p.id) ? '3px solid #2563eb' : '3px solid transparent'
                     }}>
                     <span style={{
                       width: 8, height: 8, borderRadius: '50%', display: 'inline-block', flexShrink: 0,
