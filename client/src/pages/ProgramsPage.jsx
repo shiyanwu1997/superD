@@ -77,7 +77,11 @@ const ProgramsPage = () => {
 
   // 项目搜索 + 分组过滤 + 字母排序
   const filteredProjects = useMemo(() => {
-    let list = [...projects].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+    let list = [...projects].sort((a, b) => {
+      const numA = parseInt(a.name.match(/(\d+)$/)?.[1] || '0');
+      const numB = parseInt(b.name.match(/(\d+)$/)?.[1] || '0');
+      return numA - numB || a.name.localeCompare(b.name);
+    });
     if (projectSearchText) {
       list = list.filter(p =>
         p.name.toLowerCase().includes(projectSearchText.toLowerCase()) ||
@@ -512,7 +516,11 @@ const ProgramsPage = () => {
             </div>
 
             {groups.map(g => {
-              const groupProjects = projects.filter(p => p.groupId === g.id).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+              const groupProjects = projects.filter(p => p.groupId === g.id).sort((a, b) => {
+      const numA = parseInt(a.name.match(/(\d+)$/)?.[1] || '0');
+      const numB = parseInt(b.name.match(/(\d+)$/)?.[1] || '0');
+      return numA - numB || a.name.localeCompare(b.name);
+    });
               const isExpanded = expandedGroups[g.id] !== false;
               return (
                 <div key={g.id} style={{ marginBottom: 4 }}>
