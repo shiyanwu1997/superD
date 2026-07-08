@@ -212,6 +212,7 @@ const UserTable = ({ users, projects, loading, onRoleChange, onUserUpdate, allUs
         onCancel={() => setProgramModalUser(null)}
         footer={null}
         width={600}
+        bodyStyle={{ maxHeight: '70vh', overflowY: 'auto' }}
       >
         {programModalLoading ? <Spin /> : (
           <>

@@ -151,6 +151,7 @@ const ProjectManageModal = ({ open, onClose, onRefresh }) => {
       onCancel={onClose}
       width={800}
       footer={null}
+      bodyStyle={{ maxHeight: '75vh', overflowY: 'auto' }}
     >
       <Tabs
         activeKey={activeTab}
