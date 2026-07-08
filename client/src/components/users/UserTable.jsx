@@ -147,10 +147,10 @@ const UserTable = ({ users, projects, loading, onRoleChange, onUserUpdate, allUs
               />
             )}
             {isAdmin && !hasAll && (
-              <div style={{ marginTop: 4 }}>
-                <Button size="small" type="link" style={{ padding: 0, fontSize: 12 }}
+              <div style={{ marginTop: 6 }}>
+                <Button size="small" style={{ borderRadius: 6, fontSize: 12 }}
                   onClick={() => openProgramModal(record)}
-                >程序权限</Button>
+                >🔒 程序权限</Button>
               </div>
             )}
           </div>
@@ -216,15 +216,39 @@ const UserTable = ({ users, projects, loading, onRoleChange, onUserUpdate, allUs
         {programModalLoading ? <Spin /> : (
           <>
             <div style={{ marginBottom: 16 }}>
-              <div style={{ fontWeight: 500, marginBottom: 8 }}>已授权的程序：</div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                {programModalPerms.length === 0 && <Tag color="default">无</Tag>}
-                {programModalPerms.map(p => (
-                  <Tag key={p.programId} color="orange" closable
-                    onClose={() => handleRemoveProgram(p.programId)}
-                  >{p.programId}</Tag>
-                ))}
-              </div>
+              <div style={{ fontWeight: 500, marginBottom: 8, color: '#374151' }}>已授权 {programModalPerms.length} 个程序</div>
+              {programModalPerms.length === 0 ? <div style={{ color: '#9ca3af', fontSize: 13 }}>暂无授权</div> : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {/* 按机器分组 */}
+                  {(() => {
+                    const grouped = {};
+                    programModalPerms.forEach(p => {
+                      const idx = p.programId.indexOf('-');
+                      const mid = p.programId.substring(0, idx);
+                      const pname = p.programId.substring(idx + 1);
+                      if (!grouped[mid]) grouped[mid] = [];
+                      grouped[mid].push(pname);
+                    });
+                    return Object.entries(grouped).map(([mid, names]) => {
+                      const machine = projects.find(p => String(p.id) === mid);
+                      return (
+                        <div key={mid}>
+                          <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4, fontWeight: 500 }}>
+                            {machine?.name || `机器 ${mid}`}
+                          </div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                            {names.map(name => (
+                              <Tag key={mid + '-' + name} color="blue" closable
+                                onClose={() => handleRemoveProgram(mid + '-' + name)}
+                              >{name}</Tag>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
+              )}
             </div>
 
             <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: 16 }}>
