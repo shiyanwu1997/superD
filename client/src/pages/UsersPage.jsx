@@ -35,7 +35,7 @@ const COLORS = {
   user: '#faad14',
   background: '#f5f7fa',
   backgroundSecondary: '#f0f5ff',
-  border: '#e6f7ff',
+  border: '#f4f4f5',
   borderSecondary: '#f0f0f0',
   textPrimary: '#262626',
   textSecondary: '#8c8c8c',
@@ -248,15 +248,15 @@ const UsersPage = ({ isOpen, onClose }) => {
                 width: 50, 
                 height: 50, 
                 borderRadius: '50%', 
-                backgroundColor: '#e6f7ff', 
+                backgroundColor: '#f4f4f5', 
                 display: 'flex', 
                 alignItems: 'center', 
                 justifyContent: 'center',
                 boxShadow: '0 2px 8px rgba(24, 144, 255, 0.2)'
               }}>
                 {expandedAdmins.has(admin.id) ? 
-                  <UpOutlined style={{ color: '#1890ff', fontSize: 20 }} /> : 
-                  <DownOutlined style={{ color: '#1890ff', fontSize: 20 }} />
+                  <UpOutlined style={{ color: '#111', fontSize: 20 }} /> : 
+                  <DownOutlined style={{ color: '#111', fontSize: 20 }} />
                 }
               </div>
               <div>
@@ -658,7 +658,7 @@ const UsersPage = ({ isOpen, onClose }) => {
                     width: { xs: '100%', sm: 220 }, 
                     borderRadius: 12, 
                     boxShadow: SHADOWS.light,
-                    border: '1px solid #e6f7ff',
+                    border: '1px solid #f4f4f5',
                     padding: '8px 16px',
                     transition: ANIMATIONS.buttonHover
                   }}
@@ -674,7 +674,7 @@ const UsersPage = ({ isOpen, onClose }) => {
                   padding: '12px 20px', 
                   backgroundColor: COLORS.backgroundSecondary,
                   borderRadius: 12,
-                  border: '2px solid #e6f7ff'
+                  border: '2px solid #f4f4f5'
                 }}>
                   <FilterOutlined style={{ color: COLORS.primary, fontSize: 18, fontWeight: 600 }} />
                   <Space wrap>
@@ -694,7 +694,7 @@ const UsersPage = ({ isOpen, onClose }) => {
                     <Tag.CheckableTag
                       checked={roleFilter === 1}
                       onChange={() => setRoleFilter(1)}
-                      color="blue"
+                      color="default"
                       style={{ 
                         borderRadius: 10, 
                         fontWeight: roleFilter === 1 ? 700 : 500, 
@@ -787,12 +787,12 @@ const UsersPage = ({ isOpen, onClose }) => {
                   width: 40, 
                   height: 40, 
                   borderRadius: 8, 
-                  backgroundColor: '#e6f7ff', 
+                  backgroundColor: '#f4f4f5', 
                   display: 'flex', 
                   alignItems: 'center', 
                   justifyContent: 'center'
                 }}>
-                  <ClusterOutlined style={{ fontSize: 20, color: '#1890ff' }} />
+                  <ClusterOutlined style={{ fontSize: 20, color: '#111' }} />
                 </div>
                 <Title level={4} style={{ margin: 0, fontWeight: 600 }}>管理员-用户分组</Title>
               </div>
@@ -815,12 +815,12 @@ const UsersPage = ({ isOpen, onClose }) => {
                 width: 40, 
                 height: 40, 
                 borderRadius: 8, 
-                backgroundColor: '#e6f7ff', 
+                backgroundColor: '#f4f4f5', 
                 display: 'flex', 
                 alignItems: 'center', 
                 justifyContent: 'center'
               }}>
-                <UserOutlined style={{ fontSize: 20, color: '#1890ff' }} />
+                <UserOutlined style={{ fontSize: 20, color: '#111' }} />
               </div>
               <Title level={4} style={{ margin: 0, fontWeight: 600 }}>用户列表</Title>
             </div>

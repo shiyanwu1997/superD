@@ -149,10 +149,10 @@ const LogTerminal = ({ programId, logType }) => {
           {logType === 'stdout' ? '标准输出' : '标准错误'}
           {connected ? ' ●' : ' ○'}
           {paused && <span style={{ color: '#faad14', marginLeft: 8 }}>⏸ 已暂停</span>}
-          {!autoScroll && !paused && <span style={{ color: '#1890ff', marginLeft: 8 }}>↑ 已上翻</span>}
+          {!autoScroll && !paused && <span style={{ color: '#333', marginLeft: 8 }}>↑ 已上翻</span>}
         </span>
         <div>
-          <button onClick={togglePause} style={{ ...btnStyle, background: paused ? '#1890ff' : '#555' }}>
+          <button onClick={togglePause} style={{ ...btnStyle, background: paused ? '#333' : '#555' }}>
             {paused ? '▶ 继续' : '⏸ 暂停'}
           </button>
         </div>

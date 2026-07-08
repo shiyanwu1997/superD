@@ -395,7 +395,7 @@ const ProgramsPage = () => {
               <Button 
                 type="text" 
                 shape="circle" 
-                style={{ color: record.status === 'STOPPED' ? '#d9d9d9' : '#1890ff' }}
+                style={{ color: record.status === 'STOPPED' ? '#d9d9d9' : '#111' }}
                 icon={<ReloadOutlined />}
                 loading={loadingAction === 'restart'}
                 disabled={record.status === 'STOPPED' || loadingAction}
@@ -577,7 +577,7 @@ const ProgramsPage = () => {
             
             <Dropdown menu={userMenu}>
               <Space style={{ cursor: 'pointer' }}>
-                <Avatar style={{ backgroundColor: '#1890ff' }} icon={<UserOutlined />} />
+                <Avatar style={{ backgroundColor: '#111' }} icon={<UserOutlined />} />
                 <Text>{user?.username}</Text>
               </Space>
             </Dropdown>

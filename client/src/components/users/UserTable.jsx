@@ -123,7 +123,7 @@ const UserTable = ({ users, projects, loading, onRoleChange, onUserUpdate, allUs
         const userProjects = record.projectPermissions?.map(p => p.projectId) || [];
         const hasAll = Number(record.roleId) === 1;
         const isAdmin = Number(user?.roleId) === 1 || Number(user?.roleId) === 2;
-        if (hasAll) return <Tag color="blue">全部机器</Tag>;
+        if (hasAll) return <Tag color="default">全部机器</Tag>;
 
         const assigned = projects.filter(p => userProjects.includes(p.id));
         const unassigned = projects.filter(p => !userProjects.includes(p.id));
@@ -238,7 +238,7 @@ const UserTable = ({ users, projects, loading, onRoleChange, onUserUpdate, allUs
                           </div>
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                             {names.map(name => (
-                              <Tag key={mid + '-' + name} color="blue" closable
+                              <Tag key={mid + '-' + name} color="default" closable
                                 onClose={() => handleRemoveProgram(mid + '-' + name)}
                               >{name}</Tag>
                             ))}
