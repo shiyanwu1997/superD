@@ -75,9 +75,9 @@ const ProgramsPage = () => {
     return programs.filter(p => p.name.toLowerCase().includes(searchText.toLowerCase()));
   }, [programs, searchText]);
 
-  // 项目搜索 + 分组过滤
+  // 项目搜索 + 分组过滤 + 字母排序
   const filteredProjects = useMemo(() => {
-    let list = projects;
+    let list = [...projects].sort((a, b) => a.name.localeCompare(b.name));
     if (projectSearchText) {
       list = list.filter(p =>
         p.name.toLowerCase().includes(projectSearchText.toLowerCase()) ||
@@ -508,7 +508,7 @@ const ProgramsPage = () => {
             </div>
 
             {groups.map(g => {
-              const groupProjects = projects.filter(p => p.groupId === g.id);
+              const groupProjects = projects.filter(p => p.groupId === g.id).sort((a, b) => a.name.localeCompare(b.name));
               const isExpanded = expandedGroups[g.id] !== false;
               return (
                 <div key={g.id} style={{ marginBottom: 4 }}>
