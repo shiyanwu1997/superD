@@ -305,7 +305,7 @@ const UsersPage = ({ isOpen, onClose }) => {
                 marginTop: 20, 
                 paddingTop: 20, 
                 borderTop: `2px solid ${COLORS.border}`,
-                maxHeight: expandedAdmins.has(admin.id) ? '1000px' : '0',
+                maxHeight: expandedAdmins.has(admin.id) ? '5000px' : '0',
                 overflow: 'hidden',
                 opacity: expandedAdmins.has(admin.id) ? 1 : 0,
                 transform: expandedAdmins.has(admin.id) ? 'translateY(0)' : 'translateY(-10px)',
@@ -432,7 +432,7 @@ const UsersPage = ({ isOpen, onClose }) => {
 
   // 主内容
   const mainContent = (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', gap: 24 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       {/* 顶部统计卡片 - 现代化设计 */}
       <Row gutter={24}>
         <Col xs={24} sm={12} md={6}>
@@ -776,7 +776,7 @@ const UsersPage = ({ isOpen, onClose }) => {
           border: '1px solid rgba(22, 119, 255, 0.05)',
           background: 'linear-gradient(135deg, #ffffff 0%, #fafafa 100%)'
         }}
-        styles={{ body: { height: '100%', display: 'flex', flexDirection: 'column', gap: 28, padding: 24 }}}
+        styles={{ body: { height: 'auto', display: 'flex', flexDirection: 'column', gap: 28, padding: 24 }}}
       >
         {/* 超级管理员显示分组视图 - 仅在未选择角色筛选时显示 */}
         {Number(user?.roleId) === 1 && roleFilter === null && (
@@ -832,13 +832,13 @@ const UsersPage = ({ isOpen, onClose }) => {
           <Card 
             variant="outlined" 
             style={{ 
-              height: '100%', 
+              height: 'auto', 
               borderRadius: 8, 
               backgroundColor: '#fff',
               boxShadow: SHADOWS.light,
               transition: 'all 0.3s ease'
             }}
-            styles={{ body: { height: '100%', padding: 16 }}}
+            styles={{ body: { height: 'auto', padding: 16 }}}
           >
             <UserTable 
               users={searchFilteredUsers} 
@@ -880,17 +880,12 @@ const UsersPage = ({ isOpen, onClose }) => {
         maskClosable
         getContainer={document.body}
         zIndex={1000}
-        style={{ 
-          maxHeight: '85vh',
-          display: 'flex',
-          alignItems: 'flex-start',
-          justifyContent: 'center',
-          top: '5vh'
-        }}
-        bodyStyle={{ 
-          padding: 0, 
-          maxHeight: '80vh',
-          overflow: 'auto',
+        style={{ top: 20 }}
+        bodyStyle={{
+          padding: 0,
+          maxHeight: 'calc(100vh - 200px)',
+          overflowY: 'auto',
+          overflowX: 'hidden',
           display: 'flex',
           flexDirection: 'column'
         }}

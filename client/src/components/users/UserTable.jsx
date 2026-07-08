@@ -203,7 +203,7 @@ const UserTable = ({ users, projects, loading, onRoleChange, onUserUpdate, allUs
   return (
     <>
       <Table dataSource={users} columns={columns} rowKey="id" loading={loading}
-        pagination={false} size="small" scroll={{ x: 800 }} />
+        pagination={false} size="small" scroll={{ x: 1000 }} />
 
       {/* 程序权限弹窗 */}
       <Modal
