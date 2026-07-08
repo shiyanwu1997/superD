@@ -493,9 +493,9 @@ const ProgramsPage = () => {
               style={{
                 padding: '10px 12px', cursor: 'pointer', borderRadius: 6, marginBottom: 4,
                 fontSize: 14, display: 'flex', alignItems: 'center', gap: 8,
-                background: !projectId ? '#eff6ff' : 'transparent',
+                background: !projectId ? '#f4f4f5' : 'transparent',
                 fontWeight: !projectId ? 600 : 400,
-                color: !projectId ? '#2563eb' : '#374151'
+                color: !projectId ? '#111' : '#374151'
               }}>
               <AppstoreOutlined /> 全部机器 ({projects.length})
             </div>
@@ -525,9 +525,9 @@ const ProgramsPage = () => {
                         style={{
                           padding: '8px 12px 8px 32px', cursor: 'pointer', borderRadius: 4, margin: '1px 0',
                           fontSize: 13, display: 'flex', alignItems: 'center', gap: 8,
-                          color: projectId === String(p.id) ? '#1e40af' : '#4b5563',
-                          background: projectId === String(p.id) ? '#eff6ff' : 'transparent',
-                          borderLeft: projectId === String(p.id) ? '3px solid #2563eb' : '3px solid transparent'
+                          color: projectId === String(p.id) ? '#111' : '#4b5563',
+                          background: projectId === String(p.id) ? '#f4f4f5' : 'transparent',
+                          borderLeft: projectId === String(p.id) ? '3px solid #111' : '3px solid transparent'
                         }}>
                         <span style={{
                           width: 8, height: 8, borderRadius: '50%', display: 'inline-block', flexShrink: 0,
@@ -550,9 +550,9 @@ const ProgramsPage = () => {
                     style={{
                       padding: '8px 12px', cursor: 'pointer', borderRadius: 4, margin: '1px 0',
                       fontSize: 13, display: 'flex', alignItems: 'center', gap: 8,
-                      color: projectId === String(p.id) ? '#1e40af' : '#4b5563',
-                      background: projectId === String(p.id) ? '#eff6ff' : 'transparent',
-                      borderLeft: projectId === String(p.id) ? '3px solid #2563eb' : '3px solid transparent'
+                      color: projectId === String(p.id) ? '#111' : '#4b5563',
+                      background: projectId === String(p.id) ? '#f4f4f5' : 'transparent',
+                      borderLeft: projectId === String(p.id) ? '3px solid #111' : '3px solid transparent'
                     }}>
                     <span style={{
                       width: 8, height: 8, borderRadius: '50%', display: 'inline-block', flexShrink: 0,

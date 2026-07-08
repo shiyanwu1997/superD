@@ -50230,3 +50230,117 @@
 [2026-01-13T05:56:07.522Z] [ERROR] API错误 | Request: GET /api/programs/1-fake_web_server/stdout?offset=0&length=500 | IP: ::ffff:127.0.0.1 | User: 1 | Error: 获取标准输出日志失败 | Stack: ApiError: 获取标准输出日志失败
     at /Users/wushiyan/Downloads/2/github/superD/backend/routes/index.js:641:15
     at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+[2026-07-07T09:51:32.037Z] [ERROR] API错误 | Request: POST /api/login | IP: ::ffff:127.0.0.1 | Error: 服务器内部错误 | Stack: ApiError: 服务器内部错误
+    at /Users/wushiyan/Downloads/wsy/superD/backend/routes/auth.js:53:12
+[2026-07-07T09:51:41.985Z] [ERROR] API错误 | Request: POST /api/login | IP: ::ffff:127.0.0.1 | Error: 服务器内部错误 | Stack: ApiError: 服务器内部错误
+    at /Users/wushiyan/Downloads/wsy/superD/backend/routes/auth.js:53:12
+[2026-07-07T09:52:13.382Z] [ERROR] API错误 | Request: POST /api/login | IP: ::1 | Error: 服务器内部错误 | Stack: ApiError: 服务器内部错误
+    at /Users/wushiyan/Downloads/wsy/superD/backend/routes/auth.js:53:12
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+[2026-07-07T09:52:31.693Z] [ERROR] API错误 | Request: POST /api/login | IP: ::1 | Error: 服务器内部错误 | Stack: ApiError: 服务器内部错误
+    at /Users/wushiyan/Downloads/wsy/superD/backend/routes/auth.js:53:12
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+[2026-07-07T09:52:44.200Z] [ERROR] API错误 | Request: POST /api/login | IP: ::ffff:127.0.0.1 | Error: 服务器内部错误 | Stack: ApiError: 服务器内部错误
+    at /Users/wushiyan/Downloads/wsy/superD/backend/routes/auth.js:53:12
+[2026-07-07T09:52:45.048Z] [ERROR] API错误 | Request: POST /api/login | IP: ::ffff:127.0.0.1 | Error: 服务器内部错误 | Stack: ApiError: 服务器内部错误
+    at /Users/wushiyan/Downloads/wsy/superD/backend/routes/auth.js:53:12
+[2026-07-07T09:53:04.559Z] [ERROR] API错误 | Request: POST /api/login | IP: ::ffff:127.0.0.1 | Error: 服务器内部错误 | Stack: ApiError: 服务器内部错误
+    at /Users/wushiyan/Downloads/wsy/superD/backend/routes/auth.js:53:12
+[2026-07-07T09:53:05.684Z] [ERROR] API错误 | Request: POST /api/login | IP: ::ffff:127.0.0.1 | Error: 服务器内部错误 | Stack: ApiError: 服务器内部错误
+    at /Users/wushiyan/Downloads/wsy/superD/backend/routes/auth.js:53:12
+[2026-07-07T09:53:06.386Z] [ERROR] API错误 | Request: POST /api/login | IP: ::ffff:127.0.0.1 | Error: 服务器内部错误 | Stack: ApiError: 服务器内部错误
+    at /Users/wushiyan/Downloads/wsy/superD/backend/routes/auth.js:53:12
+[2026-07-07T09:54:02.351Z] [ERROR] API错误 | Request: POST /api/login | IP: ::1 | Error: 用户名或密码错误 | Stack: ApiError: 用户名或密码错误
+    at /Users/wushiyan/Downloads/wsy/superD/backend/routes/auth.js:36:13
+[2026-07-07T09:55:13.941Z] [ERROR] API错误 | Request: POST /api/login | IP: ::ffff:127.0.0.1 | Error: 用户名或密码错误 | Stack: ApiError: 用户名或密码错误
+    at /Users/wushiyan/Downloads/wsy/superD/backend/routes/auth.js:36:13
+[2026-07-07T09:55:14.611Z] [ERROR] API错误 | Request: POST /api/login | IP: ::ffff:127.0.0.1 | Error: 用户名或密码错误 | Stack: ApiError: 用户名或密码错误
+    at /Users/wushiyan/Downloads/wsy/superD/backend/routes/auth.js:36:13
+[2026-07-07T09:55:15.112Z] [ERROR] API错误 | Request: POST /api/login | IP: ::ffff:127.0.0.1 | Error: 用户名或密码错误 | Stack: ApiError: 用户名或密码错误
+    at /Users/wushiyan/Downloads/wsy/superD/backend/routes/auth.js:36:13
+[2026-07-07T10:01:45.462Z] [ERROR] API错误 | Request: GET /api/groups | IP: ::ffff:127.0.0.1 | Error: API接口不存在 | Stack: ApiError: API接口不存在
+    at notFoundHandler (/Users/wushiyan/Downloads/wsy/superD/backend/utils/errors.js:77:17)
+    at Layer.handleRequest (/Users/wushiyan/Downloads/wsy/superD/backend/node_modules/router/lib/layer.js:152:17)
+    at trimPrefix (/Users/wushiyan/Downloads/wsy/superD/backend/node_modules/router/index.js:342:13)
+    at /Users/wushiyan/Downloads/wsy/superD/backend/node_modules/router/index.js:297:9
+    at processParams (/Users/wushiyan/Downloads/wsy/superD/backend/node_modules/router/index.js:582:12)
+    at Immediate.next (/Users/wushiyan/Downloads/wsy/superD/backend/node_modules/router/index.js:291:5)
+    at Immediate._onImmediate (/Users/wushiyan/Downloads/wsy/superD/backend/node_modules/router/index.js:688:15)
+    at process.processImmediate (node:internal/timers:487:21)
+[2026-07-07T10:01:45.514Z] [ERROR] API错误 | Request: GET /api/groups | IP: ::ffff:127.0.0.1 | Error: API接口不存在 | Stack: ApiError: API接口不存在
+    at notFoundHandler (/Users/wushiyan/Downloads/wsy/superD/backend/utils/errors.js:77:17)
+    at Layer.handleRequest (/Users/wushiyan/Downloads/wsy/superD/backend/node_modules/router/lib/layer.js:152:17)
+    at trimPrefix (/Users/wushiyan/Downloads/wsy/superD/backend/node_modules/router/index.js:342:13)
+    at /Users/wushiyan/Downloads/wsy/superD/backend/node_modules/router/index.js:297:9
+    at processParams (/Users/wushiyan/Downloads/wsy/superD/backend/node_modules/router/index.js:582:12)
+    at Immediate.next (/Users/wushiyan/Downloads/wsy/superD/backend/node_modules/router/index.js:291:5)
+    at Immediate._onImmediate (/Users/wushiyan/Downloads/wsy/superD/backend/node_modules/router/index.js:688:15)
+    at process.processImmediate (node:internal/timers:487:21)
+[2026-07-07T10:02:00.750Z] [ERROR] API错误 | Request: POST /api/login | IP: ::1 | Error: 用户名或密码错误 | Stack: ApiError: 用户名或密码错误
+    at /Users/wushiyan/Downloads/wsy/superD/backend/routes/auth.js:36:13
+[2026-07-07T10:02:00.941Z] [ERROR] API错误 | Request: POST /api/groups | IP: ::1 | Error: API接口不存在 | Stack: ApiError: API接口不存在
+    at notFoundHandler (/Users/wushiyan/Downloads/wsy/superD/backend/utils/errors.js:77:17)
+    at Layer.handleRequest (/Users/wushiyan/Downloads/wsy/superD/backend/node_modules/router/lib/layer.js:152:17)
+    at trimPrefix (/Users/wushiyan/Downloads/wsy/superD/backend/node_modules/router/index.js:342:13)
+    at /Users/wushiyan/Downloads/wsy/superD/backend/node_modules/router/index.js:297:9
+    at processParams (/Users/wushiyan/Downloads/wsy/superD/backend/node_modules/router/index.js:582:12)
+    at Immediate.next (/Users/wushiyan/Downloads/wsy/superD/backend/node_modules/router/index.js:291:5)
+    at Immediate._onImmediate (/Users/wushiyan/Downloads/wsy/superD/backend/node_modules/router/index.js:688:15)
+    at process.processImmediate (node:internal/timers:487:21)
+[2026-07-07T10:02:00.958Z] [ERROR] API错误 | Request: GET /api/groups | IP: ::1 | Error: API接口不存在 | Stack: ApiError: API接口不存在
+    at notFoundHandler (/Users/wushiyan/Downloads/wsy/superD/backend/utils/errors.js:77:17)
+    at Layer.handleRequest (/Users/wushiyan/Downloads/wsy/superD/backend/node_modules/router/lib/layer.js:152:17)
+    at trimPrefix (/Users/wushiyan/Downloads/wsy/superD/backend/node_modules/router/index.js:342:13)
+    at /Users/wushiyan/Downloads/wsy/superD/backend/node_modules/router/index.js:297:9
+    at processParams (/Users/wushiyan/Downloads/wsy/superD/backend/node_modules/router/index.js:582:12)
+    at Immediate.next (/Users/wushiyan/Downloads/wsy/superD/backend/node_modules/router/index.js:291:5)
+    at Immediate._onImmediate (/Users/wushiyan/Downloads/wsy/superD/backend/node_modules/router/index.js:688:15)
+    at process.processImmediate (node:internal/timers:487:21)
+[2026-07-07T10:02:07.180Z] [ERROR] API错误 | Request: GET /api/groups | IP: ::ffff:127.0.0.1 | Error: API接口不存在 | Stack: ApiError: API接口不存在
+    at notFoundHandler (/Users/wushiyan/Downloads/wsy/superD/backend/utils/errors.js:77:17)
+    at Layer.handleRequest (/Users/wushiyan/Downloads/wsy/superD/backend/node_modules/router/lib/layer.js:152:17)
+    at trimPrefix (/Users/wushiyan/Downloads/wsy/superD/backend/node_modules/router/index.js:342:13)
+    at /Users/wushiyan/Downloads/wsy/superD/backend/node_modules/router/index.js:297:9
+    at processParams (/Users/wushiyan/Downloads/wsy/superD/backend/node_modules/router/index.js:582:12)
+    at Immediate.next (/Users/wushiyan/Downloads/wsy/superD/backend/node_modules/router/index.js:291:5)
+    at Immediate._onImmediate (/Users/wushiyan/Downloads/wsy/superD/backend/node_modules/router/index.js:688:15)
+    at process.processImmediate (node:internal/timers:487:21)
+[2026-07-07T10:02:54.788Z] [ERROR] API错误 | Request: POST /api/login | IP: ::1 | Error: 用户名或密码错误 | Stack: ApiError: 用户名或密码错误
+    at /Users/wushiyan/Downloads/wsy/superD/backend/routes/auth.js:36:13
+[2026-07-07T10:02:54.879Z] [ERROR] API错误 | Request: POST /api/login | IP: ::1 | Error: 用户名或密码错误 | Stack: ApiError: 用户名或密码错误
+    at /Users/wushiyan/Downloads/wsy/superD/backend/routes/auth.js:36:13
+[2026-07-07T10:02:54.964Z] [ERROR] API错误 | Request: POST /api/login | IP: ::1 | Error: 用户名或密码错误 | Stack: ApiError: 用户名或密码错误
+    at /Users/wushiyan/Downloads/wsy/superD/backend/routes/auth.js:36:13
+[2026-07-07T10:13:01.754Z] [ERROR] 未处理的错误 | Request: GET /api/user | IP: ::ffff:127.0.0.1 | Error: Not allowed by CORS | Stack: Error: Not allowed by CORS
+    at origin (/Users/wushiyan/Downloads/wsy/superD/backend/app.js:41:16)
+    at /Users/wushiyan/Downloads/wsy/superD/backend/node_modules/cors/lib/index.js:219:13
+    at optionsCallback (/Users/wushiyan/Downloads/wsy/superD/backend/node_modules/cors/lib/index.js:199:9)
+    at corsMiddleware (/Users/wushiyan/Downloads/wsy/superD/backend/node_modules/cors/lib/index.js:204:7)
+    at Layer.handleRequest (/Users/wushiyan/Downloads/wsy/superD/backend/node_modules/router/lib/layer.js:152:17)
+    at trimPrefix (/Users/wushiyan/Downloads/wsy/superD/backend/node_modules/router/index.js:342:13)
+    at /Users/wushiyan/Downloads/wsy/superD/backend/node_modules/router/index.js:297:9
+    at processParams (/Users/wushiyan/Downloads/wsy/superD/backend/node_modules/router/index.js:582:12)
+    at next (/Users/wushiyan/Downloads/wsy/superD/backend/node_modules/router/index.js:291:5)
+    at read (/Users/wushiyan/Downloads/wsy/superD/backend/node_modules/body-parser/lib/read.js:54:5)
+[2026-07-07T10:13:06.882Z] [ERROR] 未处理的错误 | Request: OPTIONS /api/login | IP: ::ffff:127.0.0.1 | Error: Not allowed by CORS | Stack: Error: Not allowed by CORS
+    at origin (/Users/wushiyan/Downloads/wsy/superD/backend/app.js:41:16)
+    at /Users/wushiyan/Downloads/wsy/superD/backend/node_modules/cors/lib/index.js:219:13
+    at optionsCallback (/Users/wushiyan/Downloads/wsy/superD/backend/node_modules/cors/lib/index.js:199:9)
+    at corsMiddleware (/Users/wushiyan/Downloads/wsy/superD/backend/node_modules/cors/lib/index.js:204:7)
+    at Layer.handleRequest (/Users/wushiyan/Downloads/wsy/superD/backend/node_modules/router/lib/layer.js:152:17)
+    at trimPrefix (/Users/wushiyan/Downloads/wsy/superD/backend/node_modules/router/index.js:342:13)
+    at /Users/wushiyan/Downloads/wsy/superD/backend/node_modules/router/index.js:297:9
+    at processParams (/Users/wushiyan/Downloads/wsy/superD/backend/node_modules/router/index.js:582:12)
+    at next (/Users/wushiyan/Downloads/wsy/superD/backend/node_modules/router/index.js:291:5)
+    at read (/Users/wushiyan/Downloads/wsy/superD/backend/node_modules/body-parser/lib/read.js:54:5)
+[2026-07-07T10:16:09.561Z] [ERROR] 未处理的错误 | Request: OPTIONS /api/login | IP: ::ffff:127.0.0.1 | Error: Not allowed by CORS | Stack: Error: Not allowed by CORS
+    at origin (/Users/wushiyan/Downloads/wsy/superD/backend/app.js:41:16)
+    at /Users/wushiyan/Downloads/wsy/superD/backend/node_modules/cors/lib/index.js:219:13
+    at optionsCallback (/Users/wushiyan/Downloads/wsy/superD/backend/node_modules/cors/lib/index.js:199:9)
+    at corsMiddleware (/Users/wushiyan/Downloads/wsy/superD/backend/node_modules/cors/lib/index.js:204:7)
+    at Layer.handleRequest (/Users/wushiyan/Downloads/wsy/superD/backend/node_modules/router/lib/layer.js:152:17)
+    at trimPrefix (/Users/wushiyan/Downloads/wsy/superD/backend/node_modules/router/index.js:342:13)
+    at /Users/wushiyan/Downloads/wsy/superD/backend/node_modules/router/index.js:297:9
+    at processParams (/Users/wushiyan/Downloads/wsy/superD/backend/node_modules/router/index.js:582:12)
+    at next (/Users/wushiyan/Downloads/wsy/superD/backend/node_modules/router/index.js:291:5)
+    at read (/Users/wushiyan/Downloads/wsy/superD/backend/node_modules/body-parser/lib/read.js:54:5)

@@ -2,7 +2,7 @@ import React from 'react';
 
 const LogoIcon = ({ size = 32 }) => (
   <svg width={size} height={size} viewBox="0 0 40 40" fill="none">
-    <rect width="40" height="40" rx="10" fill="#2563eb" />
+    <rect width="40" height="40" rx="10" fill="#111" />
     {/* Stylized process nodes */}
     <rect x="10" y="10" width="8" height="6" rx="2" fill="#fff" opacity="0.95" />
     <rect x="22" y="10" width="8" height="6" rx="2" fill="#fff" opacity="0.7" />

@@ -3,7 +3,7 @@ import { Card, Row, Col, Statistic } from 'antd';
 import { AppstoreOutlined, CheckCircleOutlined, PauseCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 
 const items = [
-  { title: '总程序数', key: 'total', icon: AppstoreOutlined, color: '#2563eb', bg: '#eff6ff' },
+  { title: '总程序数', key: 'total', icon: AppstoreOutlined, color: '#111', bg: '#f4f4f5' },
   { title: '运行中', key: 'running', icon: CheckCircleOutlined, color: '#10b981', bg: '#ecfdf5' },
   { title: '已停止', key: 'stopped', icon: PauseCircleOutlined, color: '#64748b', bg: '#f8fafc' },
   { title: '异常', key: 'error', icon: ExclamationCircleOutlined, color: '#ef4444', bg: '#fef2f2' },
