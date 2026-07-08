@@ -95,7 +95,7 @@ const ProgramsPage = () => {
       );
     }
     return list;
-  }, [projects, projectSearchText]);
+  }, [projects, projectSearchText, sortKey]);
 
   // --- API 交互 ---
 
