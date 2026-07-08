@@ -23,6 +23,7 @@ import {
 import UsersPage from './UsersPage';
 import ProgramDetailPage from './ProgramDetailPage';
 import StatsCards from '../components/StatsCards';
+import Logo from '../components/Logo';
 import ProjectManageModal from '../components/modals/ProjectManageModal';
 import ChangePasswordModal from '../components/modals/ChangePasswordModal';
 
@@ -445,17 +446,10 @@ const ProgramsPage = () => {
           }}
         >
           <div style={{
-            height: 56, display: 'flex', alignItems: 'center', padding: '0 20px',
+            height: 56, display: 'flex', alignItems: 'center', padding: collapsed ? '0 12px' : '0 20px', justifyContent: collapsed ? 'center' : 'flex-start',
             borderBottom: '1px solid var(--border)'
           }}>
-            <div style={{
-              width: 32, height: 32, borderRadius: 8,
-              background: 'var(--accent)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: 10
-            }}>
-              <ClusterOutlined style={{ fontSize: 16, color: '#fff' }} />
-            </div>
-            {!collapsed && <span style={{ fontWeight: 600, fontSize: 17, color: 'var(--text)' }}>Supervisor</span>}
+            <Logo size={32} collapsed={collapsed} />
           </div>
 
           <div style={{
