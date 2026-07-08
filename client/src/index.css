@@ -132,3 +132,7 @@ body {
 .ant-tabs-nav { margin-bottom: 0 !important; }
 .ant-tabs-tab { font-weight: 500 !important; font-size: 13px !important; }
 .ant-tabs-ink-bar { background: var(--accent) !important; }
+
+.ant-input-search .ant-input-search-button { background: #111 !important; border-color: #111 !important; }
+.ant-input-search .ant-input-search-button:hover { background: #333 !important; border-color: #333 !important; }
+.ant-input-affix-wrapper-focused { border-color: #111 !important; box-shadow: 0 0 0 3px rgba(0,0,0,.08) !important; }
