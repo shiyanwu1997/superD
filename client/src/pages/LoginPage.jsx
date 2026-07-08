@@ -43,7 +43,7 @@ const LoginPage = () => {
           }}>
             <ClusterOutlined style={{ fontSize: 32, color: '#fff' }} />
           </div>
-          <Title level={3} style={{ margin: 0, fontWeight: 700 }}>SuperD</Title>
+          <Title level={3} style={{ margin: 0, fontWeight: 700 }}>Supervisor</Title>
           <Text type="secondary">Supervisor 进程管理平台</Text>
         </div>
 

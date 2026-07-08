@@ -455,7 +455,7 @@ const ProgramsPage = () => {
             }}>
               <ClusterOutlined style={{ fontSize: 20, color: '#fff' }} />
             </div>
-            {!collapsed && <span style={{ fontWeight: 700, fontSize: 20, color: '#f1f5f9', letterSpacing: '-.5px' }}>SuperD</span>}
+            {!collapsed && <span style={{ fontWeight: 700, fontSize: 20, color: '#f1f5f9', letterSpacing: '-.5px' }}>Supervisor</span>}
           </div>
 
           <div style={{
@@ -601,7 +601,7 @@ const ProgramsPage = () => {
         </Sider>
 
         <Layout>
-          <Header style={{ padding: '0 24px', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 1px 4px rgba(0,21,41,.08)', zIndex: 9 }}>
+          <Header style={{ padding: '0 24px', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #e2e8f0', zIndex: 9, height: 56 }}>
             {React.createElement(collapsed ? MenuUnfoldOutlined : MenuFoldOutlined, {
               className: 'trigger',
               onClick: () => setCollapsed(!collapsed),
