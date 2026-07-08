@@ -440,22 +440,22 @@ const ProgramsPage = () => {
           collapsed={collapsed}
           width={280}
           style={{
-            boxShadow: '2px 0 12px rgba(0,0,0,.1)', zIndex: 10,
-            backgroundColor: '#1e293b', borderRight: 'none'
+            boxShadow: '2px 0 12px rgba(0,0,0,.15)', zIndex: 10,
+            backgroundColor: 'var(--sidebar, #0f172a)', borderRight: 'none'
           }}
         >
           <div style={{
-            height: 72, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            borderBottom: '1px solid rgba(255,255,255,.08)', background: '#1e293b'
+            height: 64, display: 'flex', alignItems: 'center', padding: '0 20px',
+            borderBottom: '1px solid rgba(255,255,255,.06)'
           }}>
             <div style={{
-              width: 36, height: 36, borderRadius: 10,
-              background: 'linear-gradient(135deg, #667eea, #764ba2)',
+              width: 34, height: 34, borderRadius: 9,
+              background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
               display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: 12
             }}>
-              <ClusterOutlined style={{ fontSize: 20, color: '#fff' }} />
+              <ClusterOutlined style={{ fontSize: 18, color: '#fff' }} />
             </div>
-            {!collapsed && <span style={{ fontWeight: 700, fontSize: 20, color: '#f1f5f9', letterSpacing: '-.5px' }}>Supervisor</span>}
+            {!collapsed && <span style={{ fontWeight: 700, fontSize: 18, color: '#f1f5f9', letterSpacing: '-.3px' }}>Supervisor</span>}
           </div>
 
           <div style={{
