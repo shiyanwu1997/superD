@@ -75,12 +75,18 @@ const ProgramsPage = () => {
     return programs.filter(p => p.name.toLowerCase().includes(searchText.toLowerCase()));
   }, [programs, searchText]);
 
+  const sortKey = useCallback((name) => {
+    const prefix = name.split('-')[0] || '';
+    const suffix = parseInt(name.match(/(\d+)$/)?.[1] || '0');
+    return [prefix, suffix];
+  }, []);
+
   // 项目搜索 + 分组过滤 + 字母排序
   const filteredProjects = useMemo(() => {
     let list = [...projects].sort((a, b) => {
-      const numA = parseInt(a.name.match(/(\d+)$/)?.[1] || '0');
-      const numB = parseInt(b.name.match(/(\d+)$/)?.[1] || '0');
-      return numA - numB || a.name.localeCompare(b.name);
+      const [pa, sa] = sortKey(a.name);
+      const [pb, sb] = sortKey(b.name);
+      return pa.localeCompare(pb) || sa - sb;
     });
     if (projectSearchText) {
       list = list.filter(p =>
@@ -517,9 +523,9 @@ const ProgramsPage = () => {
 
             {groups.map(g => {
               const groupProjects = projects.filter(p => p.groupId === g.id).sort((a, b) => {
-      const numA = parseInt(a.name.match(/(\d+)$/)?.[1] || '0');
-      const numB = parseInt(b.name.match(/(\d+)$/)?.[1] || '0');
-      return numA - numB || a.name.localeCompare(b.name);
+      const [pa, sa] = sortKey(a.name);
+      const [pb, sb] = sortKey(b.name);
+      return pa.localeCompare(pb) || sa - sb;
     });
               const isExpanded = expandedGroups[g.id] !== false;
               return (
