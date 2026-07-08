@@ -77,7 +77,7 @@ const ProgramsPage = () => {
 
   // 项目搜索 + 分组过滤 + 字母排序
   const filteredProjects = useMemo(() => {
-    let list = [...projects].sort((a, b) => a.name.localeCompare(b.name));
+    let list = [...projects].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
     if (projectSearchText) {
       list = list.filter(p =>
         p.name.toLowerCase().includes(projectSearchText.toLowerCase()) ||
@@ -187,34 +187,37 @@ const ProgramsPage = () => {
     }
   }, [getDelayedConnectionStatus, fetchGroups]);
 
-  const fetchAllProgramsData = async () => {
-    setLoading(true);
+  const fetchAllProgramsData = async (showLoading = true) => { // eslint-disable-line no-unused-vars
     try {
       const data = await getAllPrograms();
       const uniquePrograms = [...new Map(data.map(program => [program.id, program])).values()];
-      setPrograms(uniquePrograms);
-    } catch (error) {
-      console.error('获取所有程序列表失败:', error);
-      message.error('获取程序列表失败');
-    } finally {
-      setLoading(false);
-    }
+      setPrograms(prev => prev.length === 0 ? uniquePrograms : prev.map(p => {
+        const u = uniquePrograms.find(x => x.id === p.id);
+        return u ? { ...p, status: u.status, state: u.state, uptime: u.uptime } : p;
+      }));
+    } catch { /* silent refresh */ }
   };
 
-  const fetchPrograms = async (pid) => {
+  const fetchPrograms = async (pid, showLoading = true) => {
     if (!pid) return;
-    // 统一转换为字符串类型，确保类型安全
     const projectIdStr = String(pid);
     const projectIdNum = Number(pid);
-    setLoading(true);
     try {
+      if (showLoading) setLoading(true);
       const data = await getProgramsByProject(projectIdStr);
-      
-      // 只保留去重逻辑，移除所有过滤逻辑
       const uniquePrograms = [...new Map(data.map(program => [program.id, program])).values()];
-      
-      // 返回所有去重后的程序，不做任何过滤
-      setPrograms(uniquePrograms);
+
+      // 静默刷新：仅更新状态字段，不触发loading闪光
+      setPrograms(prev => {
+        if (prev.length === 0) return uniquePrograms;
+        // 如果程序数量变了，全量更新
+        if (prev.length !== uniquePrograms.length) return uniquePrograms;
+        // 否则只更新 status 和 uptime
+        return prev.map(p => {
+          const updated = uniquePrograms.find(u => u.id === p.id);
+          return updated ? { ...p, status: updated.status, state: updated.state, uptime: updated.uptime } : p;
+        });
+      });
       
       // 更新项目连接状态为在线
       setProjects(prevProjects => prevProjects.map(p => 
@@ -222,17 +225,18 @@ const ProgramsPage = () => {
       ));
       
     } catch (err) {
-      setPrograms([]);
+      if (showLoading) {
+        setPrograms([]);
+        if (!err.message?.includes('cancel')) {
+          message.error(err.response?.data?.error || '获取程序列表失败');
+        }
+      }
       // 更新项目连接状态为离线
-      setProjects(prevProjects => prevProjects.map(p => 
+      setProjects(prevProjects => prevProjects.map(p =>
         p.id === projectIdNum ? { ...p, connectionStatus: { connected: false, error: err.message } } : p
       ));
-      
-      if (!err.message?.includes('cancel')) {
-        message.error(err.response?.data?.error || '获取程序列表失败');
-      }
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   };
 
@@ -259,7 +263,7 @@ const ProgramsPage = () => {
 
   // 自动刷新：每10秒更新进程状态（利用5秒缓存，对Supervisor负载很小）
   useEffect(() => {
-    const fn = projectId ? () => fetchPrograms(projectId) : fetchAllProgramsData;
+    const fn = projectId ? () => fetchPrograms(projectId, false) : () => fetchAllProgramsData(false);
     const timer = setInterval(fn, 10000);
     return () => clearInterval(timer);
   }, [projectId]);
@@ -508,7 +512,7 @@ const ProgramsPage = () => {
             </div>
 
             {groups.map(g => {
-              const groupProjects = projects.filter(p => p.groupId === g.id).sort((a, b) => a.name.localeCompare(b.name));
+              const groupProjects = projects.filter(p => p.groupId === g.id).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
               const isExpanded = expandedGroups[g.id] !== false;
               return (
                 <div key={g.id} style={{ marginBottom: 4 }}>
