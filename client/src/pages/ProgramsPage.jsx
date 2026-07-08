@@ -437,65 +437,64 @@ const ProgramsPage = () => {
         <Sider 
           trigger={null} 
           collapsible 
-          collapsed={collapsed} 
-          width={280} 
-          theme="light"
-          style={{ 
-            boxShadow: '2px 0 12px 0 rgba(29,35,41,.06)', 
-            zIndex: 10,
-            backgroundColor: '#ffffff',
-            borderRight: '1px solid #f5f5f5'
+          collapsed={collapsed}
+          width={280}
+          style={{
+            boxShadow: '2px 0 12px rgba(0,0,0,.1)', zIndex: 10,
+            backgroundColor: '#1e293b', borderRight: 'none'
           }}
         >
-          {/* Logo区域优化 */}
-          <div style={{ 
-            height: 72, 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center', 
-            borderBottom: '1px solid #e8e8e8',
-            background: '#ffffff',
-            color: '#2d3748',
-            boxShadow: '0 1px 4px rgba(0,0,0,0.05)'
+          <div style={{
+            height: 72, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            borderBottom: '1px solid rgba(255,255,255,.08)', background: '#1e293b'
           }}>
-            <ClusterOutlined style={{ fontSize: 32, color: '#2d3748', marginRight: 16 }} />
-            {!collapsed && <span style={{ 
-              fontWeight: '700', 
-              fontSize: 22, 
-              color: '#2d3748',
-              letterSpacing: '0.5px',
-              fontFamily: 'Segoe UI, Roboto, sans-serif',
-              textShadow: '0 1px 2px rgba(0,0,0,0.05)'
-            }}>Supervisor</span>}
+            <div style={{
+              width: 36, height: 36, borderRadius: 10,
+              background: 'linear-gradient(135deg, #667eea, #764ba2)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: 12
+            }}>
+              <ClusterOutlined style={{ fontSize: 20, color: '#fff' }} />
+            </div>
+            {!collapsed && <span style={{ fontWeight: 700, fontSize: 20, color: '#f1f5f9', letterSpacing: '-.5px' }}>SuperD</span>}
           </div>
-          
-          {/* 搜索和项目列表标题区域 */}
-          <div style={{ 
-            padding: '20px 20px 16px', 
-            display: collapsed ? 'none' : 'flex', 
-            flexDirection: 'column', 
-            gap: '16px',
-            backgroundColor: '#ffffff',
-            borderBottom: '1px solid #f0f0f0'
+
+          <div style={{
+            padding: '16px 16px 12px', display: collapsed ? 'none' : 'block',
+            borderBottom: '1px solid rgba(255,255,255,.06)'
           }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text style={{ 
-                fontSize: 14, 
-                fontWeight: '600',
-                textTransform: 'uppercase',
-                letterSpacing: '1px',
-                color: '#4a5568',
-                fontFamily: 'Segoe UI, Roboto, sans-serif'
-              }}>机器列表 ({filteredProjects.length})</Text>
+            <style>{`
+              .sidebar-search.ant-input-search .ant-input {
+                background: rgba(255,255,255,.08) !important;
+                border: none !important;
+                color: #e2e8f0 !important;
+                border-radius: 8px !important;
+              }
+              .sidebar-search.ant-input-search .ant-input::placeholder {
+                color: #64748b !important;
+              }
+              .sidebar-search.ant-input-search .ant-input-search-button {
+                background: transparent !important;
+                border: none !important;
+                color: #64748b !important;
+              }
+              .tree-item-hover:hover {
+                background: rgba(255,255,255,.06) !important;
+              }
+              .tree-group-hover:hover {
+                background: rgba(255,255,255,.08) !important;
+              }
+            `}</style>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1 }}>机器列表 ({filteredProjects.length})</span>
               {user?.roleId === 1 && (
                 <Tooltip title="管理机器">
-                  <Button 
-                    type="text" 
-                    size="small" 
-                    icon={<SettingOutlined />} 
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={<SettingOutlined />}
                     onClick={() => setShowProjectModal(true)}
-                    style={{ 
-                      color: '#667eea',
+                    style={{
+                      color: '#818cf8',
                       fontSize: '14px',
                       fontWeight: '500'
                     }}
@@ -503,8 +502,7 @@ const ProgramsPage = () => {
                 </Tooltip>
               )}
             </div>
-            
-            {/* 搜索框优化 */}
+
             <Input.Search
               placeholder="搜索机器名称或描述"
               allowClear
@@ -512,16 +510,8 @@ const ProgramsPage = () => {
               size="middle"
               value={projectSearchText}
               onChange={(e) => setProjectSearchText(e.target.value)}
-              style={{ 
-                width: '100%',
-                borderRadius: '12px',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-                borderColor: '#e2e8f0',
-                transition: 'all 0.3s ease',
-                '&:hover': {
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
-                }
-              }}
+              className="sidebar-search"
+              style={{ width: '100%' }}
             />
           </div>
 
@@ -529,11 +519,13 @@ const ProgramsPage = () => {
           <div style={{ height: 'calc(100% - 128px)', overflow: 'auto', padding: '0 8px' }}>
             <div
               onClick={() => { navigate('/programs'); }}
+              className="tree-item-hover"
               style={{
                 padding: '10px 12px', cursor: 'pointer', borderRadius: 6, marginBottom: 4,
-                background: !projectId ? '#e6f7ff' : 'transparent',
-                fontWeight: !projectId ? 600 : 400, fontSize: 14,
-                display: 'flex', alignItems: 'center', gap: 8
+                fontSize: 14, display: 'flex', alignItems: 'center', gap: 8,
+                background: !projectId ? 'rgba(99,102,241,.15)' : 'transparent',
+                fontWeight: !projectId ? 600 : 400,
+                color: !projectId ? '#818cf8' : '#cbd5e1'
               }}>
               <AppstoreOutlined /> 全部机器 ({projects.length})
             </div>
@@ -545,26 +537,29 @@ const ProgramsPage = () => {
                 <div key={g.id} style={{ marginBottom: 4 }}>
                   <div
                     onClick={() => setExpandedGroups(prev => ({ ...prev, [g.id]: !isExpanded }))}
+                    className="tree-group-hover"
                     style={{
                       padding: '8px 12px', cursor: 'pointer', borderRadius: 6,
-                      fontWeight: 500, fontSize: 13, color: '#4a5568',
+                      fontWeight: 500, fontSize: 13, color: '#94a3b8',
                       display: 'flex', alignItems: 'center', gap: 6, userSelect: 'none',
-                      background: '#f7fafc'
+                      background: 'rgba(255,255,255,.04)'
                     }}>
                     <span style={{ fontSize: 10 }}>{isExpanded ? '▼' : '▶'}</span>
                     📁 {g.name}
-                    <span style={{ fontSize: 11, color: '#999', marginLeft: 'auto' }}>{g.machineCount}台</span>
+                    <span style={{ fontSize: 11, color: '#64748b', marginLeft: 'auto' }}>{g.machineCount}台</span>
                   </div>
                   {isExpanded && groupProjects
                     .filter(p => !projectSearchText || p.name.includes(projectSearchText))
                     .map(p => (
                       <div key={p.id}
                         onClick={() => navigate(`/programs/${p.id}`)}
+                        className="tree-item-hover"
                         style={{
                           padding: '8px 12px 8px 32px', cursor: 'pointer', borderRadius: 4, margin: '1px 0',
-                          background: projectId === String(p.id) ? '#e6f7ff' : 'transparent',
-                          borderLeft: projectId === String(p.id) ? '3px solid #1890ff' : '3px solid transparent',
-                          fontSize: 13, display: 'flex', alignItems: 'center', gap: 8
+                          fontSize: 13, display: 'flex', alignItems: 'center', gap: 8,
+                          color: projectId === String(p.id) ? '#e2e8f0' : '#cbd5e1',
+                          background: projectId === String(p.id) ? 'rgba(99,102,241,.12)' : 'transparent',
+                          borderLeft: projectId === String(p.id) ? '3px solid #818cf8' : '3px solid transparent'
                         }}>
                         <span style={{
                           width: 8, height: 8, borderRadius: '50%', display: 'inline-block', flexShrink: 0,
@@ -580,15 +575,17 @@ const ProgramsPage = () => {
 
             {filteredProjects.filter(p => !p.groupId).length > 0 && (
               <div style={{ marginTop: 8 }}>
-                <div style={{ padding: '8px 12px', fontSize: 12, color: '#999', fontWeight: 500 }}>未分组</div>
+                <div style={{ padding: '8px 12px', fontSize: 12, color: '#94a3b8', fontWeight: 500 }}>未分组</div>
                 {filteredProjects.filter(p => !p.groupId).map(p => (
                   <div key={p.id}
                     onClick={() => navigate(`/programs/${p.id}`)}
+                    className="tree-item-hover"
                     style={{
                       padding: '8px 12px', cursor: 'pointer', borderRadius: 4, margin: '1px 0',
-                      background: projectId === String(p.id) ? '#e6f7ff' : 'transparent',
-                      borderLeft: projectId === String(p.id) ? '3px solid #1890ff' : '3px solid transparent',
-                      fontSize: 13, display: 'flex', alignItems: 'center', gap: 8
+                      fontSize: 13, display: 'flex', alignItems: 'center', gap: 8,
+                      color: projectId === String(p.id) ? '#e2e8f0' : '#cbd5e1',
+                      background: projectId === String(p.id) ? 'rgba(99,102,241,.12)' : 'transparent',
+                      borderLeft: projectId === String(p.id) ? '3px solid #818cf8' : '3px solid transparent'
                     }}>
                     <span style={{
                       width: 8, height: 8, borderRadius: '50%', display: 'inline-block', flexShrink: 0,

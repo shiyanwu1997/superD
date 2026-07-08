@@ -1,61 +1,73 @@
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { Button, Input, Card, Typography, Alert, Space } from 'antd';
+import { ClusterOutlined, UserOutlined, LockOutlined } from '@ant-design/icons';
+
+const { Title, Text } = Typography;
 
 const LoginPage = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const { login } = useAuth();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    e.stopPropagation();
     setError('');
-    console.log('Form submitted, preventing default and propagation');
-    
+    setLoading(true);
     try {
-      console.log('Attempting login with username:', username);
       const result = await login(username, password);
-      console.log('Login result:', result);
-      if (!result.success) {
-        setError(result.error || '登录失败，请检查用户名和密码');
-      }
-    } catch (error) {
-      console.error('Login error:', error);
-      setError('登录过程中发生错误: ' + error.message);
+      if (!result.success) setError(result.error || '用户名或密码错误');
+    } catch (err) {
+      setError('登录失败: ' + (err.message || '网络错误'));
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="login-container">
-      <div className="login-form">
-        <h2>Supervisor</h2>
-        {error && <div className="error-message">{error}</div>}
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label htmlFor="username">用户名</label>
-            <input
-              type="text"
-              id="username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              required
-            />
+    <div style={{
+      minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+    }}>
+      <Card style={{
+        width: 420, borderRadius: 16, boxShadow: '0 20px 60px rgba(0,0,0,.15)',
+        border: 'none', padding: '32px 24px'
+      }}>
+        <div style={{ textAlign: 'center', marginBottom: 32 }}>
+          <div style={{
+            width: 64, height: 64, borderRadius: 16, margin: '0 auto 16px',
+            background: 'linear-gradient(135deg, #667eea, #764ba2)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center'
+          }}>
+            <ClusterOutlined style={{ fontSize: 32, color: '#fff' }} />
           </div>
-          <div className="form-group">
-            <label htmlFor="password">密码</label>
-            <input
-              type="password"
-              id="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-          </div>
-          <button type="submit" className="login-button">登录</button>
-        </form>
+          <Title level={3} style={{ margin: 0, fontWeight: 700 }}>SuperD</Title>
+          <Text type="secondary">Supervisor 进程管理平台</Text>
+        </div>
 
-      </div>
+        {error && <Alert message={error} type="error" showIcon style={{ marginBottom: 16, borderRadius: 8 }} />}
+
+        <form onSubmit={handleSubmit}>
+          <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+            <Input size="large" prefix={<UserOutlined style={{ color: '#94a3b8' }} />}
+              placeholder="用户名" value={username}
+              onChange={e => setUsername(e.target.value)} required />
+            <Input.Password size="large" prefix={<LockOutlined style={{ color: '#94a3b8' }} />}
+              placeholder="密码" value={password}
+              onChange={e => setPassword(e.target.value)} required />
+            <Button type="primary" htmlType="submit" size="large" block loading={loading}
+              style={{
+                height: 44, fontWeight: 600, fontSize: 16, marginTop: 8,
+                background: 'linear-gradient(135deg, #667eea, #764ba2)',
+                border: 'none'
+              }}>
+              登录
+            </Button>
+          </Space>
+        </form>
+      </Card>
     </div>
   );
 };
