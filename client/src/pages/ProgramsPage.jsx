@@ -257,6 +257,13 @@ const ProgramsPage = () => {
     }
   }, [projectId, user, loadingProjects]);
 
+  // 自动刷新：每10秒更新进程状态（利用5秒缓存，对Supervisor负载很小）
+  useEffect(() => {
+    const fn = projectId ? () => fetchPrograms(projectId) : fetchAllProgramsData;
+    const timer = setInterval(fn, 10000);
+    return () => clearInterval(timer);
+  }, [projectId]);
+
   // --- 动作处理 ---
 
   const handleAction = async (id, action, name) => {
