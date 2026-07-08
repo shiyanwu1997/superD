@@ -312,36 +312,32 @@ const ProgramsPage = () => {
   };
 
   const handleBatch = async (action, name) => {
-    const hide = message.loading(`正在${name}所有程序...`, 0);
+    const targets = searchText ? filteredPrograms : programs;
+    if (targets.length === 0) { message.warning('没有可操作的程序'); return; }
+
+    const label = searchText ? `筛选的 ${targets.length} 个程序` : '所有程序';
+    const hide = message.loading(`正在${name}${label}...`, 0);
+
     try {
-      let res;
-      if (action === 'start') res = await startAllPrograms(projectId);
-      if (action === 'stop') res = await stopAllPrograms(projectId);
-      if (action === 'restart') res = await restartAllPrograms(projectId);
-      
-      
-      if (res?.success) {
-        hide();
-        message.success(res.message || '批量操作成功');
-        
-        // 对于批量重启和启动操作，增加延迟以确保程序有足够时间启动
-        if (action === 'restart' || action === 'start') {
-          setTimeout(() => {
-            fetchPrograms(projectId);
-          }, 1500); // 批量操作需要更多时间
-        } else {
-          fetchPrograms(projectId);
+      if (searchText) {
+        // 逐个操作筛选出的程序
+        for (const p of targets) {
+          if (action === 'start') await startProgram(p.id);
+          if (action === 'stop') await stopProgram(p.id);
+          if (action === 'restart') await restartProgram(p.id);
         }
       } else {
-        hide();
-        message.error(res?.message || '批量操作失败');
+        // 无筛选 → 批量 XML-RPC 调用
+        if (action === 'start') await startAllPrograms(projectId);
+        if (action === 'stop') await stopAllPrograms(projectId);
+        if (action === 'restart') await restartAllPrograms(projectId);
       }
+      hide();
+      message.success(`${name}完成: ${label}`);
+      setTimeout(() => fetchPrograms(projectId), action === 'stop' ? 500 : 1500);
     } catch (error) {
       hide();
-      console.error(`${name}所有程序异常:`, error);
-      // 显示更具体的错误信息
-      const errorMessage = error.response?.data?.message || error.message || '批量操作异常';
-      message.error(errorMessage);
+      message.error('操作失败: ' + (error.response?.data?.message || error.message));
     }
   };
 
