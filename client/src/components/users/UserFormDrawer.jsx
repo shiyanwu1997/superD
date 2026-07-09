@@ -25,6 +25,10 @@ const UserFormDrawer = ({
   const [loadingProgs, setLoadingProgs] = useState(false);
   // 新建用户时暂存程序权限（用户还不存在，不能调 API）
   const [pendingProgramPerms, setPendingProgramPerms] = useState([]);
+  // 跟踪当前表单中的项目ID，用于同步程序权限选择器
+  const [currentProjectIds, setCurrentProjectIds] = useState(
+    () => (editUser?.projectPermissions || []).map(p => p.projectId)
+  );
 
   // 当编辑用户变化时，更新表单
   useEffect(() => {
@@ -283,6 +287,7 @@ const UserFormDrawer = ({
             targetKeys={getSelectedProjectKeys()}
             onChange={(targetKeys) => {
               form.setFieldValue('projectIds', targetKeys);
+              setCurrentProjectIds(targetKeys);
             }}
             onSelectChange={(sourceSelectedKeys, targetSelectedKeys) => {
               setSelectedProjectKeys([...sourceSelectedKeys, ...targetSelectedKeys]);
@@ -322,12 +327,12 @@ const UserFormDrawer = ({
           {/* 添加程序权限 */}
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <Select style={{ width: 180 }} placeholder="选择机器" value={progMachine} onChange={handleProgMachineChange} allowClear
-              options={(() => {
+              options={projects.filter(p => {
                 const allowedIds = editUser
                   ? (editUser.projectPermissions || []).map(p => p.projectId)
-                  : (form.getFieldValue('projectIds') || []);
-                return projects.filter(p => allowedIds.includes(p.id)).map(p => ({ label: p.name, value: p.id }));
-              })()} />
+                  : currentProjectIds;
+                return allowedIds.includes(p.id);
+              }).map(p => ({ label: p.name, value: p.id }))} />
             <Select style={{ minWidth: 220 }} mode="multiple" placeholder="选择程序（可多选）"
               value={progSelected} onChange={setProgSelected} loading={loadingProgs} disabled={!progMachine}
               options={progList.filter(p => {
