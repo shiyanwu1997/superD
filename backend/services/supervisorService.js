@@ -385,30 +385,14 @@ const getProcessLogs = async (projectId, programName, offset = 0, length = 10000
 // 获取程序标准输出日志 - 使用Supervisor的tailProcessStdoutLog方法，默认返回最新的500行日志
 const getProcessStdoutLog = async (projectId, programName, offset = 0, length = 500) => {
   try {
-    Logger.debug(`尝试获取程序标准输出日志: ${programName}, 项目ID: ${projectId}, 偏移量: ${offset}, 长度: ${length}`);
-    // 使用Supervisor的tailProcessStdoutLog方法获取日志，该方法自动从文件末尾开始读取
-    let [logs, _logSize, _hasMore] = await callRpc(projectId, 'supervisor.tailProcessStdoutLog', [programName, offset, length]);
-    
-    Logger.debug(`获取到标准输出日志: 类型=${typeof logs}, 长度=${logs.length}, 内容=${JSON.stringify(logs.substring(0, 100))}...`);
-    
-    // 确保日志数据具有正确的换行符格式
+    let [logs, newOffset] = await callRpc(projectId, 'supervisor.tailProcessStdoutLog', [programName, offset, length]);
     if (typeof logs === 'string') {
-      // 统一换行符格式
       logs = logs.replace(/\r\n/g, '\n');
-      // 移除首尾空行并按行分割
-      const logLines = logs.split('\n').filter(line => line.trim() !== '');
-      return { logs: logLines.join('\n'), offset: 0 };
-    } else {
-      return { logs: '', offset: 0 };
+      return { logs, offset: newOffset || offset + Buffer.byteLength(logs, 'utf8') };
     }
+    return { logs: '', offset };
   } catch (error) {
-    Logger.debug(`获取标准输出日志时发生错误: 类型=${typeof error}, 信息=${error.message}, 堆栈=${error.stack}`);
-    // 如果是NO_FILE错误，返回空日志
-    if (error.message?.includes('NO_FILE')) {
-      Logger.debug(`日志文件不存在，返回空日志: ${programName}`);
-      return { logs: '', offset: offset };
-    }
-    Logger.error(`获取标准输出日志失败 (${programName}):`, error + '\n');
+    if (error.message?.includes('NO_FILE')) return { logs: '', offset };
     throw error;
   }
 };
@@ -416,29 +400,14 @@ const getProcessStdoutLog = async (projectId, programName, offset = 0, length = 
 // 获取程序标准错误日志 - 使用Supervisor的tailProcessStderrLog方法，默认返回最新的500行日志
 const getProcessStderrLog = async (projectId, programName, offset = 0, length = 500) => {
   try {
-    Logger.debug(`尝试获取程序标准错误日志: ${programName}, 项目ID: ${projectId}, 偏移量: ${offset}, 长度: ${length}`);
-    // 使用Supervisor的tailProcessStderrLog方法获取日志，该方法自动从文件末尾开始读取
-    let [logs, _logSize, _hasMore] = await callRpc(projectId, 'supervisor.tailProcessStderrLog', [programName, offset, length]);
-    
-    Logger.debug(`获取到标准错误日志: 类型=${typeof logs}, 长度=${logs.length}, 内容=${JSON.stringify(logs.substring(0, 100))}...`);
-    
-    // 确保日志数据具有正确的换行符格式
+    let [logs, newOffset] = await callRpc(projectId, 'supervisor.tailProcessStderrLog', [programName, offset, length]);
     if (typeof logs === 'string') {
-      // 统一换行符格式
       logs = logs.replace(/\r\n/g, '\n');
-      // 移除首尾空行并按行分割
-      const logLines = logs.split('\n').filter(line => line.trim() !== '');
-      return { logs: logLines.join('\n'), offset: 0 };
-    } else {
-      return { logs: '', offset: 0 };
+      return { logs, offset: newOffset || offset + Buffer.byteLength(logs, 'utf8') };
     }
+    return { logs: '', offset };
   } catch (error) {
-    Logger.debug(`获取标准错误日志时发生错误: 类型=${typeof error}, 信息=${error.message}, 堆栈=${error.stack}`);
-    if (error.message?.includes('NO_FILE')) {
-      Logger.debug(`错误日志文件不存在，返回空日志: ${programName}`);
-      return { logs: '', offset: offset };
-    }
-    Logger.error(`获取标准错误日志失败 (${programName}):`, error + '\n');
+    if (error.message?.includes('NO_FILE')) return { logs: '', offset };
     throw error;
   }
 };
