@@ -10,7 +10,8 @@ const UserFormDrawer = ({
   users,
   projects,
   editUser = null,
-  selectedAdminId = null
+  selectedAdminId = null,
+  onSwitchToEdit = null
 }) => {
   const [form] = Form.useForm();
   const { user } = useAuth();
@@ -137,6 +138,16 @@ const UserFormDrawer = ({
             setPendingProgramPerms([]);
           }
           message.success('用户创建成功');
+          onUserUpdate();
+          // 切到编辑模式，方便继续设置程序权限
+          if (onSwitchToEdit) {
+            const newUser = { ...res.user, projectPermissions: (values.projectIds || []).map(pid => ({ projectId: pid })) };
+            onSwitchToEdit(newUser);
+          } else {
+            onClose();
+            form.resetFields();
+          }
+          return;
         } else {
           message.error(res.error || '创建失败');
           return;
@@ -311,7 +322,12 @@ const UserFormDrawer = ({
           {/* 添加程序权限 */}
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <Select style={{ width: 180 }} placeholder="选择机器" value={progMachine} onChange={handleProgMachineChange} allowClear
-              options={projects.map(p => ({ label: p.name, value: p.id }))} />
+              options={(() => {
+                const allowedIds = editUser
+                  ? (editUser.projectPermissions || []).map(p => p.projectId)
+                  : (form.getFieldValue('projectIds') || []);
+                return projects.filter(p => allowedIds.includes(p.id)).map(p => ({ label: p.name, value: p.id }));
+              })()} />
             <Select style={{ minWidth: 220 }} mode="multiple" placeholder="选择程序（可多选）"
               value={progSelected} onChange={setProgSelected} loading={loadingProgs} disabled={!progMachine}
               options={progList.filter(p => {
