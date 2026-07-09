@@ -119,7 +119,10 @@ router.post('/api/projects', authMiddleware.verifyToken, authMiddleware.checkAdm
     const { name, description, host, port, username, password } = req.body;
 
     if (!name || !host || !port) {
-      throw new ApiError(400, '项目名称、主机和端口不能为空');
+      throw new ApiError(400, '机器名称、主机和端口不能为空');
+    }
+    if (isNaN(parseInt(port)) || parseInt(port) < 1 || parseInt(port) > 65535) {
+      throw new ApiError(400, '端口必须是 1-65535 之间的数字');
     }
 
     const newProject = await db.createProject(name, description || '', host, parseInt(port), username || '', password || '');
@@ -144,7 +147,10 @@ router.put('/api/projects/:id', authMiddleware.verifyToken, authMiddleware.check
     const { name, description, host, port, username, password } = req.body;
 
     if (!name || !host || !port) {
-      throw new ApiError(400, '项目名称、主机和端口不能为空');
+      throw new ApiError(400, '机器名称、主机和端口不能为空');
+    }
+    if (isNaN(parseInt(port)) || parseInt(port) < 1 || parseInt(port) > 65535) {
+      throw new ApiError(400, '端口必须是 1-65535 之间的数字');
     }
 
     const updatedProject = await db.updateProject(parseInt(id), {
