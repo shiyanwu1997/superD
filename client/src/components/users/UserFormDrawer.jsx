@@ -1,21 +1,27 @@
 import React, { useEffect, useState } from 'react';
-import { Drawer, Form, Input, Select, Transfer, Button, message } from 'antd';
-import { createUser, setUserProjectPermission, removeUserProjectPermission, updateUserPassword, updateUserRole } from '../../utils/api';
+import { Drawer, Form, Input, Select, Transfer, Button, message, Tag } from 'antd';
+import { createUser, setUserProjectPermission, removeUserProjectPermission, updateUserPassword, updateUserRole, addUserProgramPermission, removeUserProgramPermission, getUserProgramPermissions, getProgramsByProject } from '../../utils/api';
 import { useAuth } from '../../contexts/AuthContext';
 
-const UserFormDrawer = ({ 
-  visible, 
-  onClose, 
-  onUserUpdate, 
-  users, 
-  projects, 
-  editUser = null, 
-  selectedAdminId = null 
+const UserFormDrawer = ({
+  visible,
+  onClose,
+  onUserUpdate,
+  users,
+  projects,
+  editUser = null,
+  selectedAdminId = null
 }) => {
   const [form] = Form.useForm();
   const { user } = useAuth();
   const [selectedRoleId, setSelectedRoleId] = useState(3);
   const [selectedProjectKeys, setSelectedProjectKeys] = useState([]);
+  // 程序权限
+  const [programPerms, setProgramPerms] = useState([]);
+  const [progMachine, setProgMachine] = useState(null);
+  const [progList, setProgList] = useState([]);
+  const [progSelected, setProgSelected] = useState([]);
+  const [loadingProgs, setLoadingProgs] = useState(false);
 
   // 当编辑用户变化时，更新表单
   useEffect(() => {
@@ -28,14 +34,49 @@ const UserFormDrawer = ({
         projectIds: assignedProjectIds
       });
     } else {
-      // 新建用户时，如果有选择的管理员，则设置默认值
-        form.setFieldsValue({
-          roleId: null, // 角色默认显示为空
-          createdBy: null, // 上级管理员默认显示为空
-          projectIds: []
-        });
+      form.setFieldsValue({ roleId: null, createdBy: null, projectIds: [] });
     }
   }, [editUser, selectedAdminId, form, user?.id]);
+
+  // 程序权限：当抽屉打开或用户变化时加载
+  const handleDrawerOpen = (open) => {
+    if (open && editUser) {
+      getUserProgramPermissions(editUser.id).then(p => setProgramPerms(p || [])).catch(() => {});
+    }
+    if (!open) setProgramPerms([]);
+  };
+
+  // 选择机器后加载程序列表
+  const handleProgMachineChange = async (pid) => {
+    setProgMachine(pid);
+    setProgSelected([]);
+    if (!pid) { setProgList([]); return; }
+    setLoadingProgs(true);
+    try {
+      const list = await getProgramsByProject(pid);
+      setProgList(list || []);
+    } catch { setProgList([]); }
+    setLoadingProgs(false);
+  };
+
+  // 添加程序权限
+  const handleAddProgramPerms = async () => {
+    if (!progMachine || progSelected.length === 0) return;
+    for (const name of progSelected) {
+      await addUserProgramPermission(editUser.id, `${progMachine}-${name}`).catch(() => {});
+    }
+    const perms = await getUserProgramPermissions(editUser.id);
+    setProgramPerms(perms || []);
+    setProgSelected([]);
+    message.success('已添加');
+  };
+
+  // 移除程序权限
+  const handleRemoveProgramPerm = async (programId) => {
+    await removeUserProgramPermission(editUser.id, programId);
+    const perms = await getUserProgramPermissions(editUser.id);
+    setProgramPerms(perms || []);
+  };
   
 
 
@@ -127,6 +168,7 @@ const UserFormDrawer = ({
       placement="right"
       onClose={onClose}
       open={visible}
+        afterOpenChange={handleDrawerOpen}
       width={500}
       footer={(
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '16px' }}>
@@ -228,6 +270,33 @@ const UserFormDrawer = ({
             listStyle={{ height: 300 }}
           />
         </Form.Item>
+
+        {/* 程序权限（仅编辑已有用户时可用） */}
+        {editUser && (
+          <div style={{ marginTop: 8, padding: '12px 0', borderTop: '1px solid #f0f0f0' }}>
+            <div style={{ fontWeight: 500, marginBottom: 8, fontSize: 14 }}>程序权限（可选，不选则可操作全部程序）</div>
+            {/* 已有程序权限 */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 12 }}>
+              {programPerms.length === 0 && <span style={{ color: '#9ca3af', fontSize: 12 }}>未限制</span>}
+              {programPerms.map(p => (
+                <Tag key={p.programId} color="blue" closable onClose={() => handleRemoveProgramPerm(p.programId)}>
+                  {p.programId}
+                </Tag>
+              ))}
+            </div>
+            {/* 添加程序权限 */}
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <Select style={{ width: 180 }} placeholder="选择机器" value={progMachine} onChange={handleProgMachineChange} allowClear
+                options={projects.filter(p => (editUser.projectPermissions || []).some(pp => pp.projectId === p.id)).map(p => ({ label: p.name, value: p.id }))} />
+              <Select style={{ minWidth: 220 }} mode="multiple" placeholder="选择程序（可多选）"
+                value={progSelected} onChange={setProgSelected} loading={loadingProgs} disabled={!progMachine}
+                options={progList.filter(p => !programPerms.some(pp => pp.programId === `${progMachine}-${p.name}`)).map(p => ({ label: p.name, value: p.name }))}
+                showSearch filterOption={(input, option) => (option?.label || '').toLowerCase().includes(input.toLowerCase())}
+                notFoundContent={progMachine ? '无程序' : '请先选机器'} />
+              <Button type="primary" disabled={!progMachine || progSelected.length === 0} onClick={handleAddProgramPerms}>添加</Button>
+            </div>
+          </div>
+        )}
       </Form>
     </Drawer>
   );
