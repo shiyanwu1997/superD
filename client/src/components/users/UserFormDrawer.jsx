@@ -10,8 +10,7 @@ const UserFormDrawer = ({
   users,
   projects,
   editUser = null,
-  selectedAdminId = null,
-  onSwitchToEdit = null
+  selectedAdminId = null
 }) => {
   const [form] = Form.useForm();
   const { user } = useAuth();
@@ -23,6 +22,8 @@ const UserFormDrawer = ({
   const [progList, setProgList] = useState([]);
   const [progSelected, setProgSelected] = useState([]);
   const [loadingProgs, setLoadingProgs] = useState(false);
+  // 新建用户时暂存程序权限（用户还不存在，不能调 API）
+  const [pendingProgramPerms, setPendingProgramPerms] = useState([]);
 
   // 当编辑用户变化时，更新表单
   useEffect(() => {
@@ -63,20 +64,33 @@ const UserFormDrawer = ({
   // 添加程序权限
   const handleAddProgramPerms = async () => {
     if (!progMachine || progSelected.length === 0) return;
-    for (const name of progSelected) {
-      await addUserProgramPermission(editUser.id, `${progMachine}-${name}`).catch(() => {});
+    if (editUser) {
+      // 编辑已有用户 → 直接调 API
+      for (const name of progSelected) {
+        await addUserProgramPermission(editUser.id, `${progMachine}-${name}`).catch(() => {});
+      }
+      const perms = await getUserProgramPermissions(editUser.id);
+      setProgramPerms(perms || []);
+    } else {
+      // 新建用户 → 暂存到本地
+      const newPerms = progSelected.map(name => `${progMachine}-${name}`);
+      setPendingProgramPerms(prev => [...prev, ...newPerms]);
     }
-    const perms = await getUserProgramPermissions(editUser.id);
-    setProgramPerms(perms || []);
     setProgSelected([]);
+    setProgMachine(null);
+    setProgList([]);
     message.success('已添加');
   };
 
   // 移除程序权限
   const handleRemoveProgramPerm = async (programId) => {
-    await removeUserProgramPermission(editUser.id, programId);
-    const perms = await getUserProgramPermissions(editUser.id);
-    setProgramPerms(perms || []);
+    if (editUser) {
+      await removeUserProgramPermission(editUser.id, programId);
+      const perms = await getUserProgramPermissions(editUser.id);
+      setProgramPerms(perms || []);
+    } else {
+      setPendingProgramPerms(prev => prev.filter(p => p !== programId));
+    }
   };
   
 
@@ -115,16 +129,14 @@ const UserFormDrawer = ({
         const res = await createUser(values.username, values.password, values.roleId, createdBy);
         if (res.success) {
           if (values.projectIds && values.projectIds.length > 0) {
-            const permissionPromises = values.projectIds.map(pid => setUserProjectPermission(res.user.id, pid));
-            await Promise.all(permissionPromises);
+            await Promise.all(values.projectIds.map(pid => setUserProjectPermission(res.user.id, pid)));
           }
-          message.success('用户创建成功，可继续设置程序权限');
-          onUserUpdate();
-          // 不关闭抽屉，切换到编辑模式以设置程序权限
-          if (onSwitchToEdit) {
-            onSwitchToEdit({ ...res.user, projectPermissions: (values.projectIds || []).map(pid => ({ projectId: pid })) });
+          // 保存暂存的程序权限
+          if (pendingProgramPerms.length > 0) {
+            await Promise.all(pendingProgramPerms.map(pid => addUserProgramPermission(res.user.id, pid)));
+            setPendingProgramPerms([]);
           }
-          return;
+          message.success('用户创建成功');
         } else {
           message.error(res.error || '创建失败');
           return;
@@ -276,36 +288,42 @@ const UserFormDrawer = ({
           />
         </Form.Item>
 
-        {/* 程序权限（新建用户需先保存后再编辑） */}
-        {editUser ? (
-          <div style={{ marginTop: 8, padding: '12px 0', borderTop: '1px solid #f0f0f0' }}>
-            <div style={{ fontWeight: 500, marginBottom: 8, fontSize: 14 }}>程序权限（可选，不选则可操作全部程序）</div>
-            {/* 已有程序权限 */}
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 12 }}>
-              {programPerms.length === 0 && <span style={{ color: '#9ca3af', fontSize: 12 }}>未限制</span>}
-              {programPerms.map(p => (
-                <Tag key={p.programId} color="blue" closable onClose={() => handleRemoveProgramPerm(p.programId)}>
-                  {p.programId}
-                </Tag>
-              ))}
-            </div>
-            {/* 添加程序权限 */}
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <Select style={{ width: 180 }} placeholder="选择机器" value={progMachine} onChange={handleProgMachineChange} allowClear
-                options={projects.filter(p => (editUser.projectPermissions || []).some(pp => pp.projectId === p.id)).map(p => ({ label: p.name, value: p.id }))} />
-              <Select style={{ minWidth: 220 }} mode="multiple" placeholder="选择程序（可多选）"
-                value={progSelected} onChange={setProgSelected} loading={loadingProgs} disabled={!progMachine}
-                options={progList.filter(p => !programPerms.some(pp => pp.programId === `${progMachine}-${p.name}`)).map(p => ({ label: p.name, value: p.name }))}
-                showSearch filterOption={(input, option) => (option?.label || '').toLowerCase().includes(input.toLowerCase())}
-                notFoundContent={progMachine ? '无程序' : '请先选机器'} />
-              <Button type="primary" disabled={!progMachine || progSelected.length === 0} onClick={handleAddProgramPerms}>添加</Button>
-            </div>
+        {/* 程序权限（新建和编辑均可用） */}
+        <div style={{ marginTop: 8, padding: '12px 0', borderTop: '1px solid #f0f0f0' }}>
+          <div style={{ fontWeight: 500, marginBottom: 8, fontSize: 14 }}>程序权限（可选，不选则可操作全部程序）</div>
+          {/* 已有程序权限 */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 12 }}>
+            {editUser && programPerms.length === 0 && pendingProgramPerms.length === 0 && <span style={{ color: '#9ca3af', fontSize: 12 }}>未限制</span>}
+            {!editUser && pendingProgramPerms.length === 0 && <span style={{ color: '#9ca3af', fontSize: 12 }}>未限制</span>}
+            {/* 编辑模式：API 加载的程序权限 */}
+            {editUser && programPerms.map(p => (
+              <Tag key={p.programId} color="blue" closable onClose={() => handleRemoveProgramPerm(p.programId)}>
+                {p.programId}
+              </Tag>
+            ))}
+            {/* 新建模式：本地暂存的程序权限 */}
+            {!editUser && pendingProgramPerms.map(p => (
+              <Tag key={p} color="blue" closable onClose={() => handleRemoveProgramPerm(p)}>
+                {p}
+              </Tag>
+            ))}
           </div>
-        ) : (
-          <div style={{ marginTop: 8, padding: '12px 0', borderTop: '1px solid #f0f0f0', color: '#9ca3af', fontSize: 12 }}>
-            程序权限需保存用户后再编辑设置
+          {/* 添加程序权限 */}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <Select style={{ width: 180 }} placeholder="选择机器" value={progMachine} onChange={handleProgMachineChange} allowClear
+              options={projects.map(p => ({ label: p.name, value: p.id }))} />
+            <Select style={{ minWidth: 220 }} mode="multiple" placeholder="选择程序（可多选）"
+              value={progSelected} onChange={setProgSelected} loading={loadingProgs} disabled={!progMachine}
+              options={progList.filter(p => {
+                const key = `${progMachine}-${p.name}`;
+                const existing = editUser ? programPerms.map(x => x.programId || x) : pendingProgramPerms;
+                return !existing.includes(key);
+              }).map(p => ({ label: p.name, value: p.name }))}
+              showSearch filterOption={(input, option) => (option?.label || '').toLowerCase().includes(input.toLowerCase())}
+              notFoundContent={progMachine ? '无程序' : '请先选机器'} />
+            <Button type="primary" disabled={!progMachine || progSelected.length === 0} onClick={handleAddProgramPerms}>添加</Button>
           </div>
-        )}
+        </div>
       </Form>
     </Drawer>
   );

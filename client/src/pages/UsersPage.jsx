@@ -865,7 +865,6 @@ const UsersPage = ({ isOpen, onClose }) => {
         projects={projects}
         editUser={editUser}
         selectedAdminId={selectedAdminId}
-        onSwitchToEdit={setEditUser}
       />
     </div>
   );
