@@ -341,7 +341,7 @@ const UserFormDrawer = ({
                 return !existing.includes(key);
               }).map(p => ({ label: p.name, value: p.name }))}
               showSearch filterOption={(input, option) => (option?.label || '').toLowerCase().includes(input.toLowerCase())}
-              notFoundContent={progMachine ? '无程序' : '请先选机器'} />
+              notFoundContent={loadingProgs ? '加载中...' : (progMachine ? '无程序' : '请先选机器')} />
             <Button type="primary" disabled={!progMachine || progSelected.length === 0} onClick={handleAddProgramPerms}>添加</Button>
           </div>
         </div>
