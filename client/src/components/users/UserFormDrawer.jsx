@@ -10,7 +10,8 @@ const UserFormDrawer = ({
   users,
   projects,
   editUser = null,
-  selectedAdminId = null
+  selectedAdminId = null,
+  onSwitchToEdit = null
 }) => {
   const [form] = Form.useForm();
   const { user } = useAuth();
@@ -110,16 +111,20 @@ const UserFormDrawer = ({
         message.success('用户更新成功');
       } else {
         // 新增用户
-        // 对于普通管理员(roleId=2)，不需要设置createdBy
         const createdBy = Number(values.roleId) === 2 ? null : values.createdBy;
         const res = await createUser(values.username, values.password, values.roleId, createdBy);
         if (res.success) {
-          // 分配权限
           if (values.projectIds && values.projectIds.length > 0) {
             const permissionPromises = values.projectIds.map(pid => setUserProjectPermission(res.user.id, pid));
             await Promise.all(permissionPromises);
           }
-          message.success('用户创建成功');
+          message.success('用户创建成功，可继续设置程序权限');
+          onUserUpdate();
+          // 不关闭抽屉，切换到编辑模式以设置程序权限
+          if (onSwitchToEdit) {
+            onSwitchToEdit({ ...res.user, projectPermissions: (values.projectIds || []).map(pid => ({ projectId: pid })) });
+          }
+          return;
         } else {
           message.error(res.error || '创建失败');
           return;
@@ -271,8 +276,8 @@ const UserFormDrawer = ({
           />
         </Form.Item>
 
-        {/* 程序权限（仅编辑已有用户时可用） */}
-        {editUser && (
+        {/* 程序权限（新建用户需先保存后再编辑） */}
+        {editUser ? (
           <div style={{ marginTop: 8, padding: '12px 0', borderTop: '1px solid #f0f0f0' }}>
             <div style={{ fontWeight: 500, marginBottom: 8, fontSize: 14 }}>程序权限（可选，不选则可操作全部程序）</div>
             {/* 已有程序权限 */}
@@ -295,6 +300,10 @@ const UserFormDrawer = ({
                 notFoundContent={progMachine ? '无程序' : '请先选机器'} />
               <Button type="primary" disabled={!progMachine || progSelected.length === 0} onClick={handleAddProgramPerms}>添加</Button>
             </div>
+          </div>
+        ) : (
+          <div style={{ marginTop: 8, padding: '12px 0', borderTop: '1px solid #f0f0f0', color: '#9ca3af', fontSize: 12 }}>
+            程序权限需保存用户后再编辑设置
           </div>
         )}
       </Form>
