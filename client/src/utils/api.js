@@ -162,22 +162,6 @@ export const restartProgram = async (programId) => {
   return response.data;
 };
 
-// 获取程序标准输出日志
-export const getProgramStdout = async (programId, offset = 0, length = 10000) => {
-  const response = await api.get(`/programs/${programId}/stdout`, {
-    params: { offset, length }
-  });
-  return response.data;
-};
-
-// 获取程序标准错误日志
-export const getProgramStderr = async (programId, offset = 0, length = 10000) => {
-  const response = await api.get(`/programs/${programId}/stderr`, {
-    params: { offset, length }
-  });
-  return response.data;
-};
-
 // 启动所有程序
 export const startAllPrograms = async (projectId) => {
   const response = await api.post(`/projects/${projectId}/programs/start-all`);
@@ -288,18 +272,8 @@ export const createGroup = async (name, description) => {
   return response.data;
 };
 
-export const updateGroup = async (id, data) => {
-  const response = await api.put(`/groups/${id}`, data);
-  return response.data;
-};
-
 export const deleteGroup = async (id) => {
   const response = await api.delete(`/groups/${id}`);
-  return response.data;
-};
-
-export const getProjectsByGroup = async (groupId) => {
-  const response = await api.get(`/groups/${groupId}/projects`);
   return response.data;
 };
 
