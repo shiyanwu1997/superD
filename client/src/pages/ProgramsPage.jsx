@@ -365,11 +365,10 @@ const ProgramsPage = () => {
     {
       title: '程序名称',
       dataIndex: 'name',
-      width: 300,
-      ellipsis: true,
+      ellipsis: { showTitle: false },
       render: (text) => (
-        <Tooltip title={text}>
-          <Text strong style={{ fontSize: 14 }} ellipsis>{text}</Text>
+        <Tooltip title={text} placement="topLeft">
+          <span style={{ fontSize: 14, fontWeight: 500 }}>{text}</span>
         </Tooltip>
       )
     },
