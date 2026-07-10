@@ -41,6 +41,10 @@ const UserFormDrawer = ({
         projectIds: assignedProjectIds
       });
     } else {
+      requestAnimationFrame(() => {
+        setPendingProgramPerms([]);
+        setCurrentProjectIds([]);
+      });
       form.setFieldsValue({ roleId: null, createdBy: null, projectIds: [] });
     }
   }, [editUser, selectedAdminId, form, user?.id]);
