@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   Layout, Menu, Table, Button, Tag, Space, message,
-  Card, Row, Col, Statistic, Empty, Badge, Select,
+  Card, Row, Col, Statistic, Empty, Badge, Select, Skeleton,
   Typography, Input, Dropdown, Avatar, Tooltip
 } from 'antd';
 import { 
@@ -367,11 +367,15 @@ const ProgramsPage = () => {
       dataIndex: 'name',
       width: 260,
       ellipsis: { showTitle: false },
-      render: (text) => (
-        <Tooltip title={text} placement="topLeft">
-          <span style={{ fontSize: 14, fontWeight: 500 }}>{text}</span>
-        </Tooltip>
-      )
+      render: (text) => {
+        // 简化显示：api-kafka-subscribe:api-kafka-subscribe_00 → api-kafka-subscribe_00
+        const short = text.includes(':') ? text.split(':').pop() : text;
+        return (
+          <Tooltip title={text} placement="topLeft">
+            <span style={{ fontSize: 14, fontWeight: 500 }}>{short}</span>
+          </Tooltip>
+        );
+      }
     },
     {
       title: '运行时长',
