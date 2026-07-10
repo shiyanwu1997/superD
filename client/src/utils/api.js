@@ -66,7 +66,17 @@ const checkStatusApi = axios.create({
 // 为api实例添加拦截器
 api.interceptors.request.use(createRequestLogger('API'));
 api.interceptors.request.use(authInterceptor);
-api.interceptors.response.use(createResponseLogger('API'));
+// 401 自动跳转登录
+api.interceptors.response.use(
+  createResponseLogger('API'),
+  (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('token');
+      window.location.href = '/login';
+    }
+    return Promise.reject(error);
+  }
+);
 api.interceptors.response.use(null, createErrorLogger('API'));
 
 // 为checkStatusApi实例添加拦截器

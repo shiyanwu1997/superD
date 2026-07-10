@@ -366,7 +366,7 @@ const UsersPage = ({ isOpen, onClose }) => {
                         icon={<KeyOutlined />} 
                         onClick={() => {
                           const newPwd = prompt(`请输入用户 ${user.username} 的新密码:`);
-                          if(newPwd) updateUserPassword(user.id, newPwd).then(() => {
+                          if(newPwd && newPwd.length >= 6) updateUserPassword(user.id, newPwd).then(() => {
                             refetchUsers();
                           });
                         }}
