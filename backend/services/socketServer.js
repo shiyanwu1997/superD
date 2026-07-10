@@ -1,5 +1,7 @@
 const { Server } = require('socket.io');
+const jwt = require('jsonwebtoken');
 const { getProcessStdoutLog, getProcessStderrLog, callRpc } = require('./supervisorService');
+const { SERVER_CONFIG } = require('../config');
 const Logger = require('../utils/logger');
 
 class SocketServer {
@@ -14,13 +16,24 @@ class SocketServer {
       transports: ['polling', 'websocket'],
       allowEIO3: true
     });
-    
+
+    // JWT 认证中间件
+    this.io.use((socket, next) => {
+      const token = socket.handshake.auth?.token || socket.handshake.query?.token;
+      if (!token) return next(new Error('Authentication required'));
+      try {
+        jwt.verify(token, SERVER_CONFIG.JWT_SECRET);
+        next();
+      } catch {
+        next(new Error('Invalid token'));
+      }
+    });
+
     this.connections = new Map();
     this.timers = new Map();
-    
     this.initialize();
   }
-  
+
   initialize() {
     this.io.on('connection', (socket) => {
       Logger.debug(`Socket connected: ${socket.id}`);

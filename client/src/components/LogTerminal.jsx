@@ -89,7 +89,10 @@ const LogTerminal = ({ programId, logType }) => {
     pausedRef.current = false;
     terminal.write('正在连接日志服务...\n');
 
-    const socket = io(AppConfig.socket.url, AppConfig.socket.options);
+    const socket = io(AppConfig.socket.url, {
+      ...AppConfig.socket.options,
+      auth: { token: localStorage.getItem('token') || '' }
+    });
     socketRef.current = socket;
 
     socket.on('connect', () => {
