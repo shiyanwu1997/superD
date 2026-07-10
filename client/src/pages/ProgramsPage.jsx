@@ -48,6 +48,7 @@ const ProgramsPage = () => {
 
   // 页面加载时间状态，用于控制离线状态显示的延迟
   const pageLoadTimeRef = useRef(null);
+  const prevProjectRef = useRef(null);
   
   // 操作Loading状态
   const [actionLoading, setActionLoading] = useState({}); 
@@ -213,13 +214,16 @@ const ProgramsPage = () => {
     const projectIdStr = String(pid);
     const projectIdNum = Number(pid);
     try {
+      const isNewProject = prevProjectRef.current !== projectIdNum;
+      prevProjectRef.current = projectIdNum;
+
       if (showLoading) setLoading(true);
       const data = await getProgramsByProject(projectIdStr);
       const uniquePrograms = [...new Map(data.map(program => [program.id, program])).values()];
 
       // 静默刷新：仅更新状态字段，不触发loading闪光
       setPrograms(prev => {
-        if (prev.length === 0) return uniquePrograms;
+        if (isNewProject || prev.length === 0) return uniquePrograms;
         // 如果程序数量变了，全量更新
         if (prev.length !== uniquePrograms.length) return uniquePrograms;
         // 否则只更新 status 和 uptime
