@@ -191,8 +191,10 @@ const ProgramsPage = () => {
       });
       
     } catch (error) {
-      console.error('获取项目列表失败:', error);
-      message.error('获取项目列表失败');
+      if (!error._handled) {
+        console.error('获取项目列表失败:', error);
+        message.error('获取项目列表失败');
+      }
     } finally {
       setLoadingProjects(false);
     }
@@ -241,7 +243,7 @@ const ProgramsPage = () => {
     } catch (err) {
       if (showLoading) {
         setPrograms([]);
-        if (!err.message?.includes('cancel')) {
+        if (!err._handled && !err.message?.includes('cancel')) {
           message.error(err.response?.data?.error || '获取程序列表失败');
         }
       }
@@ -341,7 +343,7 @@ const ProgramsPage = () => {
       setTimeout(() => fetchPrograms(projectId), action === 'stop' ? 500 : 1500);
     } catch (error) {
       hide();
-      message.error('操作失败: ' + (error.response?.data?.message || error.message));
+      if (!error._handled) message.error('操作失败: ' + (error.response?.data?.message || error.message));
     }
   };
 
@@ -684,7 +686,7 @@ const ProgramsPage = () => {
                           } catch (error) {
                             console.error(`刷新失败:`, error);
                             // 如果是请求被取消的错误，不显示错误信息
-                            if (!error.message?.includes('cancel') && !error.message?.includes('NS_BINDING_ABORTED')) {
+                            if (!error._handled && !error.message?.includes('cancel') && !error.message?.includes('NS_BINDING_ABORTED')) {
                               message.error('刷新失败');
                             }
                           }
@@ -746,7 +748,7 @@ const ProgramsPage = () => {
                             const res = await reloadConfig(projectId);
                             message.success(res.message || '配置已重载');
                             setTimeout(() => fetchPrograms(projectId), 500);
-                          } catch { message.error('重载失败'); }
+                          } catch (e) { if (!e._handled) message.error('重载失败'); }
                         }}
                         icon={<ReloadOutlined />}
                         style={{ borderRadius: '10px', backgroundColor: '#718096', borderColor: '#718096', color: '#fff', fontWeight: '500' }}
