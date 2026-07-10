@@ -4,6 +4,7 @@ const bcrypt = require('bcrypt');
 const db = require('../models/db');
 const authMiddleware = require('../middleware/auth');
 const { ApiError } = require('../utils/errors');
+const { SECURITY_CONFIG } = require('../config');
 
 // API: 获取用户列表（根据角色权限返回不同的用户列表）
 router.get('/api/users', authMiddleware.verifyToken, async (req, res, next) => {
@@ -246,6 +247,9 @@ router.put('/api/users/self/password', authMiddleware.verifyToken, async (req, r
     if (!newPassword) {
       throw new ApiError(400, '新密码不能为空');
     }
+    if (newPassword.length < SECURITY_CONFIG.PASSWORD_MIN_LENGTH) {
+      throw new ApiError(400, `密码长度不能少于${SECURITY_CONFIG.PASSWORD_MIN_LENGTH}位`);
+    }
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     if (await db.updateUserPassword(userId, hashedPassword)) {
@@ -270,6 +274,9 @@ router.put('/api/users/:userId/password', authMiddleware.verifyToken, authMiddle
 
     if (isNaN(userIdInt) || !newPassword) {
       throw new ApiError(400, '无效的用户ID或密码');
+    }
+    if (newPassword.length < SECURITY_CONFIG.PASSWORD_MIN_LENGTH) {
+      throw new ApiError(400, `密码长度不能少于${SECURITY_CONFIG.PASSWORD_MIN_LENGTH}位`);
     }
 
     const currentUserId = req.session.user?.id || req.user.userId;
