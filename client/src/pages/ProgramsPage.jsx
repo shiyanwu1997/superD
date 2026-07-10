@@ -365,6 +365,7 @@ const ProgramsPage = () => {
     {
       title: '程序名称',
       dataIndex: 'name',
+      width: 260,
       ellipsis: { showTitle: false },
       render: (text) => (
         <Tooltip title={text} placement="topLeft">
