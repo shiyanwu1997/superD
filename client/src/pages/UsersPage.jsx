@@ -1,139 +1,11 @@
 import React, { useState, useMemo } from 'react';
-import { Modal, Button, Select, Tag, Space, message, Popconfirm, Divider, Input, Card, Row, Col, Typography, ConfigProvider } from 'antd';
+import { Modal, Button, Select, Tag, Space, message, Popconfirm, Divider, Input, Card, Row, Col, Typography } from 'antd';
 import { UserAddOutlined, DeleteOutlined, KeyOutlined, FilterOutlined, DownOutlined, UpOutlined, SearchOutlined, UserOutlined, TeamOutlined, LoadingOutlined, ClusterOutlined } from '@ant-design/icons';
 import { getAllUsers, deleteUser, getProjects, updateUserPassword, updateUserRole } from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useQuery } from '@tanstack/react-query';
 import UserTable from '../components/users/UserTable';
 import UserFormDrawer from '../components/users/UserFormDrawer';
-
-// 主题配置
-const themeConfig = {
-  token: {
-    colorPrimary: '#1677ff',
-    borderRadius: 12,
-    boxShadow: '0 8px 24px rgba(0, 0, 0, 0.1)',
-    colorBgContainer: '#ffffff',
-    colorBorder: '#e8e8e8',
-  },
-};
-
-// 颜色常量 - 现代配色方案
-const COLORS = {
-  primary: '#1677ff',
-  primaryLight: '#4096ff',
-  primaryDark: '#0958d9',
-  success: '#52c41a',
-  successLight: '#73d13d',
-  warning: '#faad14',
-  warningLight: '#ffc53d',
-  danger: '#ff4d4f',
-  dangerLight: '#ff7875',
-  info: '#1677ff',
-  superAdmin: '#1677ff',
-  admin: '#52c41a',
-  user: '#faad14',
-  background: '#f5f7fa',
-  backgroundSecondary: '#f0f5ff',
-  border: '#f4f4f5',
-  borderSecondary: '#f0f0f0',
-  textPrimary: '#262626',
-  textSecondary: '#8c8c8c',
-  textTertiary: '#bfbfbf',
-  cardBg: '#ffffff',
-  shadowColor: 'rgba(0, 0, 0, 0.1)',
-};
-
-// 阴影常量 - 多层次阴影系统
-const SHADOWS = {
-  light: '0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.08)',
-  medium: '0 4px 16px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.12)',
-  heavy: '0 12px 48px rgba(0, 0, 0, 0.1), 0 6px 16px rgba(0, 0, 0, 0.12)',
-  hover: '0 16px 64px rgba(0, 0, 0, 0.15), 0 8px 24px rgba(0, 0, 0, 0.18)',
-  inset: 'inset 0 2px 8px rgba(0, 0, 0, 0.06)',
-};
-
-// 动画常量 - 流畅的过渡效果
-const ANIMATIONS = {
-  fadeIn: 'fadeIn 0.5s cubic-bezier(0.23, 1, 0.32, 1)',
-  slideUp: 'slideUp 0.5s cubic-bezier(0.23, 1, 0.32, 1)',
-  slideDown: 'slideDown 0.5s cubic-bezier(0.23, 1, 0.32, 1)',
-  hoverScale: 'scale(1.03)',
-  cardHover: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
-  buttonHover: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-  tableRowHover: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-};
-
-// 添加CSS动画 - 高级过渡效果
-const style = document.createElement('style');
-style.innerHTML = `
-  /* 基础动画 */
-  @keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
-  }
-  
-  @keyframes slideUp {
-    from { transform: translateY(30px); opacity: 0; }
-    to { transform: translateY(0); opacity: 1; }
-  }
-  
-  @keyframes slideDown {
-    from { transform: translateY(-30px); opacity: 0; }
-    to { transform: translateY(0); opacity: 1; }
-  }
-  
-  @keyframes pulse {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.05); }
-    100% { transform: scale(1); }
-  }
-  
-  /* 高级动画 */
-  @keyframes float {
-    0%, 100% { transform: translateY(0px); }
-    50% { transform: translateY(-10px); }
-  }
-  
-  @keyframes shimmer {
-    0% { background-position: -468px 0; }
-    100% { background-position: 468px 0; }
-  }
-  
-  /* 卡片悬停效果 */
-  .card-hover-effect {
-    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-  
-  .card-hover-effect:hover {
-    transform: translateY(-8px);
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.12);
-  }
-  
-  /* 按钮渐变效果 */
-  .btn-gradient {
-    background: linear-gradient(135deg, #1677ff 0%, #4096ff 100%);
-    border: none;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-  
-  .btn-gradient:hover {
-    background: linear-gradient(135deg, #0958d9 0%, #1677ff 100%);
-    box-shadow: 0 8px 24px rgba(22, 119, 255, 0.3);
-    transform: translateY(-2px);
-  }
-  
-  /* 阴影过渡 */
-  .shadow-transition {
-    transition: box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-  
-  /* 平滑滚动 */
-  .smooth-scroll {
-    scroll-behavior: smooth;
-  }
-`;
-document.head.appendChild(style);
 
 const { Title, Text } = Typography;
 const UsersPage = ({ isOpen, onClose }) => {
@@ -222,7 +94,7 @@ const UsersPage = ({ isOpen, onClose }) => {
         <Card 
           variant="outlined" 
           style={{ 
-            boxShadow: SHADOWS.medium, 
+            boxShadow: '0 2px 8px rgba(0,0,0,.08)', 
             borderRadius: 12,
             transition: 'all 0.3s ease'
           }}
@@ -304,7 +176,7 @@ const UsersPage = ({ isOpen, onClose }) => {
                 marginLeft: 66, 
                 marginTop: 20, 
                 paddingTop: 20, 
-                borderTop: `2px solid ${COLORS.border}`,
+                borderTop: '2px solid #f4f4f5',
                 maxHeight: expandedAdmins.has(admin.id) ? '5000px' : '0',
                 overflow: 'hidden',
                 opacity: expandedAdmins.has(admin.id) ? 1 : 0,
@@ -318,7 +190,7 @@ const UsersPage = ({ isOpen, onClose }) => {
                     key={user.id} 
                     variant="outlined" 
                     style={{ 
-                      boxShadow: SHADOWS.light, 
+                      boxShadow: '0 1px 3px rgba(0,0,0,.06)', 
                       borderRadius: 8,
                       transition: 'all 0.3s ease'
                     }}
@@ -439,12 +311,11 @@ const UsersPage = ({ isOpen, onClose }) => {
           <Card 
           variant="outlined" 
           hoverable 
-          className="card-hover-effect"
-          style={{ 
-            boxShadow: SHADOWS.medium, 
+                    style={{ 
+            boxShadow: '0 2px 8px rgba(0,0,0,.08)', 
             borderRadius: 16, 
             background: 'linear-gradient(135deg, #ffffff 0%, #f8f9ff 100%)',
-            animation: `${ANIMATIONS.fadeIn} 0.3s ease`
+            animation: 'fadeIn 0.3s ease'
           }}
         >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0' }}>
@@ -480,12 +351,11 @@ const UsersPage = ({ isOpen, onClose }) => {
           <Card 
           variant="outlined" 
           hoverable 
-          className="card-hover-effect"
-          style={{ 
-            boxShadow: SHADOWS.medium, 
+                    style={{ 
+            boxShadow: '0 2px 8px rgba(0,0,0,.08)', 
             borderRadius: 16, 
             background: 'linear-gradient(135deg, #ffffff 0%, #f6fff8 100%)',
-            animation: `${ANIMATIONS.fadeIn} 0.4s ease`
+            animation: 'fadeIn 0.3s ease'
           }}
         >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0' }}>
@@ -521,12 +391,11 @@ const UsersPage = ({ isOpen, onClose }) => {
           <Card 
           variant="outlined" 
           hoverable 
-          className="card-hover-effect"
-          style={{ 
-            boxShadow: SHADOWS.medium, 
+                    style={{ 
+            boxShadow: '0 2px 8px rgba(0,0,0,.08)', 
             borderRadius: 16, 
             background: 'linear-gradient(135deg, #ffffff 0%, #f0fff4 100%)',
-            animation: `${ANIMATIONS.fadeIn} 0.5s ease`
+            animation: 'fadeIn 0.3s ease'
           }}
         >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0' }}>
@@ -562,12 +431,11 @@ const UsersPage = ({ isOpen, onClose }) => {
           <Card 
           variant="outlined" 
           hoverable 
-          className="card-hover-effect"
-          style={{ 
-            boxShadow: SHADOWS.medium, 
+                    style={{ 
+            boxShadow: '0 2px 8px rgba(0,0,0,.08)', 
             borderRadius: 16, 
             background: 'linear-gradient(135deg, #ffffff 0%, #fff7e6 100%)',
-            animation: `${ANIMATIONS.fadeIn} 0.6s ease`
+            animation: 'fadeIn 0.3s ease'
           }}
         >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0' }}>
@@ -604,13 +472,12 @@ const UsersPage = ({ isOpen, onClose }) => {
       {/* 顶部操作区 - 现代化设计 */}
       <Card 
         variant="outlined" 
-        className="shadow-transition"
-        style={{ 
-          boxShadow: SHADOWS.medium, 
+                style={{ 
+          boxShadow: '0 2px 8px rgba(0,0,0,.08)', 
           borderRadius: 16, 
           background: 'linear-gradient(135deg, #ffffff 0%, #fafafa 100%)',
           padding: 24,
-          animation: `${ANIMATIONS.fadeIn} 0.5s ease`,
+          animation: 'fadeIn 0.3s ease',
           border: '1px solid rgba(22, 119, 255, 0.05)'
         }}
       >
@@ -657,10 +524,10 @@ const UsersPage = ({ isOpen, onClose }) => {
                   style={{ 
                     width: { xs: '100%', sm: 220 }, 
                     borderRadius: 12, 
-                    boxShadow: SHADOWS.light,
+                    boxShadow: '0 1px 3px rgba(0,0,0,.06)',
                     border: '1px solid #f4f4f5',
                     padding: '8px 16px',
-                    transition: ANIMATIONS.buttonHover
+                    transition: 'all 0.3s ease'
                   }}
                   allowClear
                 />
@@ -672,11 +539,11 @@ const UsersPage = ({ isOpen, onClose }) => {
                   alignItems: 'center', 
                   gap: 12, 
                   padding: '12px 20px', 
-                  backgroundColor: COLORS.backgroundSecondary,
+                  backgroundColor: '#f0f5ff',
                   borderRadius: 12,
                   border: '2px solid #f4f4f5'
                 }}>
-                  <FilterOutlined style={{ color: COLORS.primary, fontSize: 18, fontWeight: 600 }} />
+                  <FilterOutlined style={{ color: '#1677ff', fontSize: 18, fontWeight: 600 }} />
                   <Space wrap>
                     <Tag.CheckableTag
                       checked={roleFilter === null}
@@ -684,7 +551,7 @@ const UsersPage = ({ isOpen, onClose }) => {
                       style={{ 
                         borderRadius: 10, 
                         fontWeight: roleFilter === null ? 700 : 500, 
-                        transition: ANIMATIONS.buttonHover,
+                        transition: 'all 0.3s ease',
                         padding: '4px 12px',
                         fontSize: 13
                       }}
@@ -698,7 +565,7 @@ const UsersPage = ({ isOpen, onClose }) => {
                       style={{ 
                         borderRadius: 10, 
                         fontWeight: roleFilter === 1 ? 700 : 500, 
-                        transition: ANIMATIONS.buttonHover,
+                        transition: 'all 0.3s ease',
                         padding: '4px 12px',
                         fontSize: 13
                       }}
@@ -712,7 +579,7 @@ const UsersPage = ({ isOpen, onClose }) => {
                       style={{ 
                         borderRadius: 10, 
                         fontWeight: roleFilter === 2 ? 700 : 500, 
-                        transition: ANIMATIONS.buttonHover,
+                        transition: 'all 0.3s ease',
                         padding: '4px 12px',
                         fontSize: 13
                       }}
@@ -726,7 +593,7 @@ const UsersPage = ({ isOpen, onClose }) => {
                       style={{ 
                         borderRadius: 10, 
                         fontWeight: roleFilter === 3 ? 700 : 500, 
-                        transition: ANIMATIONS.buttonHover,
+                        transition: 'all 0.3s ease',
                         padding: '4px 12px',
                         fontSize: 13
                       }}
@@ -747,8 +614,7 @@ const UsersPage = ({ isOpen, onClose }) => {
                     setIsDrawerOpen(true);
                   }}
                   size="large"
-                  className="btn-gradient"
-                  style={{ 
+                                    style={{ 
                     borderRadius: 12, 
                     padding: '12px 32px', 
                     boxShadow: '0 8px 24px rgba(22, 119, 255, 0.3)',
@@ -768,7 +634,7 @@ const UsersPage = ({ isOpen, onClose }) => {
       <Card 
         variant="outlined" 
         style={{ 
-          boxShadow: SHADOWS.heavy, 
+          boxShadow: '0 4px 12px rgba(0,0,0,.1)', 
           flex: 1, 
           borderRadius: 16,
           overflow: 'hidden',
@@ -780,7 +646,7 @@ const UsersPage = ({ isOpen, onClose }) => {
       >
         {/* 超级管理员显示分组视图 - 仅在未选择角色筛选时显示 */}
         {Number(user?.roleId) === 1 && roleFilter === null && (
-          <div style={{ transition: 'all 0.3s ease', animation: `${ANIMATIONS.fadeIn} 0.5s ease` }}>
+          <div style={{ transition: 'all 0.3s ease', animation: 'fadeIn 0.3s ease' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <div style={{ 
@@ -808,7 +674,7 @@ const UsersPage = ({ isOpen, onClose }) => {
         )}
         
         {/* 表格视图，应用角色过滤 */}
-        <div style={{ flex: 1, minHeight: 300, animation: `${ANIMATIONS.fadeIn} 0.6s ease`, transition: 'all 0.3s ease' }}>
+        <div style={{ flex: 1, minHeight: 300, animation: 'fadeIn 0.3s ease', transition: 'all 0.3s ease' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <div style={{ 
@@ -835,7 +701,7 @@ const UsersPage = ({ isOpen, onClose }) => {
               height: 'auto', 
               borderRadius: 8, 
               backgroundColor: '#fff',
-              boxShadow: SHADOWS.light,
+              boxShadow: '0 1px 3px rgba(0,0,0,.06)',
               transition: 'all 0.3s ease'
             }}
             styles={{ body: { height: 'auto', padding: 16 }}}
@@ -900,12 +766,7 @@ const UsersPage = ({ isOpen, onClose }) => {
     </div>
   );
 
-  // 应用主题配置
-  return (
-    <ConfigProvider theme={themeConfig}>
-      {content}
-    </ConfigProvider>
-  );
+  return content;
 };
 
 export default UsersPage;

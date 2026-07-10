@@ -366,10 +366,11 @@ const ProgramsPage = () => {
       title: '程序名称',
       dataIndex: 'name',
       width: 300,
+      ellipsis: true,
       render: (text) => (
-        <div>
-          <Text strong style={{ fontSize: 14 }}>{text}</Text>
-        </div>
+        <Tooltip title={text}>
+          <Text strong style={{ fontSize: 14 }} ellipsis>{text}</Text>
+        </Tooltip>
       )
     },
     {
