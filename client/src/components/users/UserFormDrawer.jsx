@@ -245,10 +245,7 @@ const UserFormDrawer = ({
               {Number(user?.roleId) === 1 && (
                 <>
                   <Select.Option value={2}>普通管理员</Select.Option>
-                  {/* 只有当存在普通管理员时，才能创建普通用户 */}
-                  {users.some(u => Number(u.roleId) === 2) && (
-                    <Select.Option value={3}>普通用户</Select.Option>
-                  )}
+                  <Select.Option value={3}>普通用户</Select.Option>
                 </>
               )}
               {Number(user?.roleId) === 2 && (

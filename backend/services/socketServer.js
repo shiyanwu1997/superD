@@ -86,7 +86,9 @@ class SocketServer {
   async fetchAndPushLogs(socketId) {
     const connection = this.connections.get(socketId);
     if (!connection || !connection.programId || !connection.logType) return;
-    
+    if (connection._fetching) return; // 防止并发竞态
+    connection._fetching = true;
+
     try {
       let logResult;
       // programId格式为：projectId-programName
@@ -213,6 +215,8 @@ class SocketServer {
           connection.isReducedInterval = true;
         }
       }
+    } finally {
+      connection._fetching = false;
     }
   }
 }

@@ -246,7 +246,8 @@ router.post('/api/projects/:projectId/programs/start-all', authMiddleware.verify
     const userId = req.session.user?.id || req.user.userId;
     const projectIdInt = parseInt(projectId);
 
-    if (!(await db.checkUserProjectPermission(userId, projectIdInt))) {
+    if (!(await db.checkUserProjectPermission(userId, projectIdInt)) &&
+        !(await db.getUserProgramPermissions(userId)).some(p => p.programId.startsWith(projectId + '-'))) {
       throw new ApiError(403, '没有权限访问此项目');
     }
 
@@ -267,7 +268,9 @@ router.post('/api/projects/:projectId/programs/stop-all', authMiddleware.verifyT
     const userId = req.session.user?.id || req.user.userId;
     const projectIdInt = parseInt(projectId);
 
-    if (!(await db.checkUserProjectPermission(userId, projectIdInt))) {
+    const hasProjectPerm = await db.checkUserProjectPermission(userId, projectIdInt);
+    const programPerms = await db.getUserProgramPermissions(userId);
+    if (!hasProjectPerm && !programPerms.some(p => p.programId.startsWith(projectId + '-'))) {
       throw new ApiError(403, '没有权限访问此项目');
     }
 
@@ -288,7 +291,9 @@ router.post('/api/projects/:projectId/programs/restart-all', authMiddleware.veri
     const userId = req.session.user?.id || req.user.userId;
     const projectIdInt = parseInt(projectId);
 
-    if (!(await db.checkUserProjectPermission(userId, projectIdInt))) {
+    const hasProjectPerm = await db.checkUserProjectPermission(userId, projectIdInt);
+    const programPerms = await db.getUserProgramPermissions(userId);
+    if (!hasProjectPerm && !programPerms.some(p => p.programId.startsWith(projectId + '-'))) {
       throw new ApiError(403, '没有权限访问此项目');
     }
 
@@ -372,39 +377,26 @@ router.post('/api/programs/:programId/stop', authMiddleware.verifyToken, async (
 });
 
 // API: 重启程序
-router.post('/api/programs/:programId/restart', authMiddleware.verifyToken, async (req, res) => {
+router.post('/api/programs/:programId/restart', authMiddleware.verifyToken, async (req, res, next) => {
   const { programId } = req.params;
   const userId = req.session.user?.id || req.user.userId;
 
-  let projectId, programName;
   try {
-    const parsed = parseProgramId(programId);
-    projectId = parsed.projectId;
-    programName = parsed.programName;
-  } catch (err) {
-    Logger.warn('无效的程序ID格式', { programId }, req);
-    return res.status(400).json({ error: '无效的程序ID格式' });
-  }
+    const { projectId, programName } = parseProgramId(programId);
 
-  if (!(await db.checkUserSpecificProgramPermission(userId, programId))) {
-    Logger.warn('用户没有权限重启程序', { userId, projectId, programName }, req);
-    return res.status(403).json({ error: '没有权限重启程序' });
-  }
+    if (!(await db.checkUserSpecificProgramPermission(userId, programId))) {
+      throw new ApiError(403, '没有权限重启程序');
+    }
 
-  try {
-    Logger.info('用户请求重启程序', { userId, projectId, programName }, req);
     const result = await supervisorService.restartProcess(projectId, programName);
-
     if (result.success) {
-      Logger.info('程序重启成功', { projectId, programName }, req);
       res.json({ success: true, message: `程序 ${programName} 已成功重启` });
     } else {
-      Logger.error('程序重启失败', { projectId, programName, error: result.message }, req);
       res.json({ success: false, message: `重启程序 ${programName} 失败: ${result.message}` });
     }
   } catch (error) {
-    Logger.error('重启程序异常', error, req);
-    res.json({ success: false, message: `重启程序 ${programName} 失败: ${error.message}` });
+    if (error instanceof ApiError) return next(error);
+    next(new ApiError(500, '重启程序失败', error.message));
   }
 });
 

@@ -344,7 +344,6 @@ const setProjectGroup = async (projectId, groupId) => {
 module.exports = {
   getUserByUsername,
   getUserById,
-  checkUserProgramPermission,
   checkUserProjectPermission,
   getUserProjects,
   getAllProjects,
