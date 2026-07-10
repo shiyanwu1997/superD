@@ -505,9 +505,8 @@ const stopAllProcesses = xmlrpcExceptions(async (projectId) => {
     Logger.info('尝试停止所有程序');
     Logger.debug('尝试停止所有程序');
     await callRpc(projectId, 'supervisor.stopAllProcesses', []);
-    
-    // 实现双重STOPPED状态检查机制
-    // 无论初始状态如何，都至少检查两次，确保所有程序稳定停止
+    clearProcessCache(projectId);
+
     const maxAttempts = 15;
     const delay = 1000; // 每次检查间隔1秒
     let successfulChecks = 0;
@@ -578,9 +577,8 @@ const restartAllProcesses = xmlrpcExceptions(async (projectId) => {
     Logger.debug('尝试重启所有程序');
     await callRpc(projectId, 'supervisor.stopAllProcesses', []);
     await callRpc(projectId, 'supervisor.startAllProcesses', []);
-    
-    // 实现双重RUNNING状态检查机制
-    // 无论初始状态如何，都至少检查两次，确保所有程序稳定运行
+    clearProcessCache(projectId);
+
     const maxAttempts = 15;
     const delay = 1000; // 每次检查间隔1秒
     let successfulChecks = 0;

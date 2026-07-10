@@ -34,8 +34,8 @@ const app = express();
 
 // 中间件配置
 app.use(helmet({ contentSecurityPolicy: false })); // CSP 由前端控制
-app.use(bodyParser.urlencoded({ extended: true }));
-app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
+app.use(bodyParser.json({ limit: '10mb' }));
 app.use(cors({
   origin: true,
   credentials: true
@@ -68,7 +68,7 @@ app.use(session({
   secret: SERVER_CONFIG.SESSION_SECRET,  // 使用配置文件中的密钥
   resave: false,
   saveUninitialized: true,
-  cookie: { secure: false }  // HTTPS 环境下设置为 true
+  cookie: { secure: process.env.NODE_ENV === 'production' }
 }));
 
 // 生产模式：托管前端静态文件（与API同端口，消除CORS）

@@ -264,42 +264,22 @@ async function getProjectById(projectId) {
 
 // 创建新项目
 async function createProject(name, description, host, port, username, password) {
-  // 检查项目名称是否已存在
   const [existingRows] = await queryWithLogs('SELECT * FROM projects WHERE name = ?', [name]);
-  if (existingRows.length > 0) {
-    return null; // 项目名称已存在
-  }
-  
-  // 生成新的项目ID
-  const [maxIdRows] = await queryWithLogs('SELECT MAX(id) as maxId FROM projects');
-  const newId = maxIdRows[0].maxId ? maxIdRows[0].maxId + 1 : 1;
-  
-  // 加密密码
+  if (existingRows.length > 0) return null;
+
   const encryptedPassword = encrypt(password);
-  
-  const supervisorConfigObj = {
-    host,
-    port,
-    username,
-    password: encryptedPassword
-  };
-  
-  const newProject = {
-    id: newId,
-    name,
-    description,
-    supervisorConfig: JSON.stringify(supervisorConfigObj)
-  };
-  
-  await queryWithLogs('INSERT INTO projects SET ?', newProject);
-  
-  // 返回解析后的项目数据（包含解密后的密码）
+  const supervisorConfigObj = { host, port, username, password: encryptedPassword };
+
+  const [result] = await queryWithLogs(
+    'INSERT INTO projects (name, description, supervisorConfig) VALUES (?, ?, ?)',
+    [name, description || '', JSON.stringify(supervisorConfigObj)]
+  );
+
   return {
-    ...newProject,
-    supervisorConfig: {
-      ...supervisorConfigObj,
-      password: password
-    }
+    id: result.insertId,
+    name,
+    description: description || '',
+    supervisorConfig: { ...supervisorConfigObj, password: password || '' }
   };
 }
 
@@ -401,30 +381,14 @@ async function deleteProject(projectId) {
 
 // 创建新用户
 async function createUser(username, password, roleId = 2, createdBy = null) {
-  // 检查用户名是否已存在
   const [existingRows] = await queryWithLogs('SELECT * FROM users WHERE username = ?', [username]);
-  if (existingRows.length > 0) {
-    return null;
-  }
-  
-  // 生成新用户ID
-  const [maxIdRows] = await queryWithLogs('SELECT MAX(id) as maxId FROM users');
-  const newId = maxIdRows[0].maxId ? maxIdRows[0].maxId + 1 : 1;
-  
-  const newUser = {
-    id: newId,
-    username,
-    password,
-    roleId
-  };
-  
-  // 只有当createdBy不为null时才添加到新用户对象中
-  if (createdBy !== null) {
-    newUser.createdBy = createdBy;
-  }
-  
-  await queryWithLogs('INSERT INTO users SET ?', newUser);
-  return newUser;
+  if (existingRows.length > 0) return null;
+
+  const [result] = await queryWithLogs(
+    'INSERT INTO users (username, password, roleId, createdBy) VALUES (?, ?, ?, ?)',
+    [username, password, roleId, createdBy || null]
+  );
+  return { id: result.insertId, username, password, roleId, createdBy };
 }
 
 // 删除用户

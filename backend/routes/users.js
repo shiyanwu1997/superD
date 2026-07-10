@@ -329,6 +329,8 @@ router.get('/api/users/:userId/project-permissions', authMiddleware.verifyToken,
     const currentUser = await db.getUserById(currentUserId);
     const targetUser = await db.getUserById(userIdInt);
 
+    if (!targetUser) throw new ApiError(404, '用户不存在');
+
     if (currentUserId !== userIdInt && currentUser.roleId !== 1) {
       if (currentUser.roleId === 2 &&
           (targetUser.id !== currentUserId && targetUser.createdBy !== currentUserId)) {
