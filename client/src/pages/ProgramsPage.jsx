@@ -61,6 +61,7 @@ import UsersPage from './UsersPage';
 import ProgramDetailPage from './ProgramDetailPage';
 import StatsCards from '../components/StatsCards';
 import Logo from '../components/Logo';
+import ProjectSidebar from '../components/ProjectSidebar';
 import ProjectManageModal from '../components/modals/ProjectManageModal';
 import ChangePasswordModal from '../components/modals/ChangePasswordModal';
 
@@ -79,9 +80,7 @@ const ProgramsPage = () => {
   const [loading, setLoading] = useState(false);
   const [loadingProjects, setLoadingProjects] = useState(true);
   const [searchText, setSearchText] = useState('');
-  const [projectSearchText, setProjectSearchText] = useState('');
   const [groups, setGroups] = useState([]);
-  const [expandedGroups, setExpandedGroups] = useState({});
 
   // 页面加载时间状态，用于控制离线状态显示的延迟
   const pageLoadTimeRef = useRef(null);
@@ -116,29 +115,6 @@ const ProgramsPage = () => {
     if (!searchText) return programs;
     return programs.filter((p) => p.name.toLowerCase().includes(searchText.toLowerCase()));
   }, [programs, searchText]);
-
-  const sortKey = useCallback((name) => {
-    const prefix = name.split('-')[0] || '';
-    const suffix = parseInt(name.match(/(\d+)$/)?.[1] || '0');
-    return [prefix, suffix];
-  }, []);
-
-  // 项目搜索 + 分组过滤 + 字母排序
-  const filteredProjects = useMemo(() => {
-    let list = [...projects].sort((a, b) => {
-      const [pa, sa] = sortKey(a.name);
-      const [pb, sb] = sortKey(b.name);
-      return pa.localeCompare(pb) || sa - sb;
-    });
-    if (projectSearchText) {
-      list = list.filter(
-        (p) =>
-          p.name.toLowerCase().includes(projectSearchText.toLowerCase()) ||
-          p.description?.toLowerCase().includes(projectSearchText.toLowerCase())
-      );
-    }
-    return list;
-  }, [projects, projectSearchText, sortKey]);
 
   // --- API 交互 ---
 
@@ -556,6 +532,7 @@ const ProgramsPage = () => {
           collapsible
           collapsed={collapsed}
           width={280}
+          collapsedWidth={72}
           style={{
             boxShadow: '1px 0 0 0 var(--border)',
             zIndex: 10,
@@ -576,197 +553,15 @@ const ProgramsPage = () => {
             <Logo size={32} collapsed={collapsed} />
           </div>
 
-          <div
-            style={{
-              padding: '16px 16px 12px',
-              display: collapsed ? 'none' : 'block',
-              borderBottom: '1px solid #e5e7eb',
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <span
-                style={{
-                  fontSize: 12,
-                  fontWeight: 600,
-                  color: '#6b7280',
-                  textTransform: 'uppercase',
-                  letterSpacing: 1,
-                }}
-              >
-                机器列表 ({filteredProjects.length})
-              </span>
-              {user?.roleId === 1 && (
-                <Tooltip title="管理机器">
-                  <Button
-                    type="text"
-                    size="small"
-                    icon={<SettingOutlined />}
-                    onClick={() => setShowProjectModal(true)}
-                    style={{
-                      color: '#6b7280',
-                      fontSize: '14px',
-                      fontWeight: '500',
-                    }}
-                  />
-                </Tooltip>
-              )}
-            </div>
-
-            <Input.Search
-              placeholder="搜索机器名称或描述"
-              allowClear
-              enterButton={<SearchOutlined />}
-              size="middle"
-              value={projectSearchText}
-              onChange={(e) => setProjectSearchText(e.target.value)}
-              style={{ width: '100%' }}
+          <div style={{ height: 'calc(100% - 56px)', overflow: 'hidden' }}>
+            <ProjectSidebar
+              collapsed={collapsed}
+              projects={projects}
+              groups={groups}
+              selectedProjectId={projectId ?? null}
+              isAdmin={user?.roleId === 1}
+              onManageClick={() => setShowProjectModal(true)}
             />
-          </div>
-
-          {/* 机器树：分组 + 机器 */}
-          <div style={{ height: 'calc(100% - 128px)', overflow: 'auto', padding: '0 8px' }}>
-            <div
-              onClick={() => {
-                navigate('/programs');
-              }}
-              style={{
-                padding: '10px 12px',
-                cursor: 'pointer',
-                borderRadius: 6,
-                marginBottom: 4,
-                fontSize: 14,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                background: !projectId ? '#f4f4f5' : 'transparent',
-                fontWeight: !projectId ? 600 : 400,
-                color: !projectId ? '#111' : '#374151',
-              }}
-            >
-              <AppstoreOutlined /> 全部机器 ({projects.length})
-            </div>
-
-            {groups.map((g) => {
-              const groupProjects = projects
-                .filter((p) => p.groupId === g.id)
-                .sort((a, b) => {
-                  const [pa, sa] = sortKey(a.name);
-                  const [pb, sb] = sortKey(b.name);
-                  return pa.localeCompare(pb) || sa - sb;
-                });
-              const isExpanded = expandedGroups[g.id] !== false;
-              return (
-                <div key={g.id} style={{ marginBottom: 4 }}>
-                  <div
-                    onClick={() => setExpandedGroups((prev) => ({ ...prev, [g.id]: !isExpanded }))}
-                    style={{
-                      padding: '8px 12px',
-                      cursor: 'pointer',
-                      borderRadius: 6,
-                      fontWeight: 500,
-                      fontSize: 13,
-                      color: '#6b7280',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 6,
-                      userSelect: 'none',
-                      background: '#f9fafb',
-                    }}
-                  >
-                    <span style={{ fontSize: 10 }}>{isExpanded ? '▼' : '▶'}</span>
-                    📁 {g.name}
-                    <span style={{ fontSize: 11, color: '#9ca3af', marginLeft: 'auto' }}>{g.machineCount}台</span>
-                  </div>
-                  {isExpanded &&
-                    groupProjects
-                      .filter((p) => !projectSearchText || p.name.includes(projectSearchText))
-                      .map((p) => (
-                        <div
-                          key={p.id}
-                          onClick={() => navigate(`/programs/${p.id}`)}
-                          style={{
-                            padding: '8px 12px 8px 32px',
-                            cursor: 'pointer',
-                            borderRadius: 4,
-                            margin: '1px 0',
-                            fontSize: 13,
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 8,
-                            color: projectId === String(p.id) ? '#111' : '#4b5563',
-                            background: projectId === String(p.id) ? '#f4f4f5' : 'transparent',
-                            borderLeft: projectId === String(p.id) ? '3px solid #111' : '3px solid transparent',
-                          }}
-                        >
-                          <span
-                            style={{
-                              width: 8,
-                              height: 8,
-                              borderRadius: '50%',
-                              display: 'inline-block',
-                              flexShrink: 0,
-                              backgroundColor:
-                                p.connectionStatus?.connected === true
-                                  ? '#52c41a'
-                                  : p.connectionStatus?.connected === null
-                                    ? '#d9d9d9'
-                                    : '#ff4d4f',
-                            }}
-                          />
-                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {p.name}
-                          </span>
-                        </div>
-                      ))}
-                </div>
-              );
-            })}
-
-            {filteredProjects.filter((p) => !p.groupId).length > 0 && (
-              <div style={{ marginTop: 8 }}>
-                <div style={{ padding: '8px 12px', fontSize: 12, color: '#9ca3af', fontWeight: 500 }}>未分组</div>
-                {filteredProjects
-                  .filter((p) => !p.groupId)
-                  .map((p) => (
-                    <div
-                      key={p.id}
-                      onClick={() => navigate(`/programs/${p.id}`)}
-                      style={{
-                        padding: '8px 12px',
-                        cursor: 'pointer',
-                        borderRadius: 4,
-                        margin: '1px 0',
-                        fontSize: 13,
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 8,
-                        color: projectId === String(p.id) ? '#111' : '#4b5563',
-                        background: projectId === String(p.id) ? '#f4f4f5' : 'transparent',
-                        borderLeft: projectId === String(p.id) ? '3px solid #111' : '3px solid transparent',
-                      }}
-                    >
-                      <span
-                        style={{
-                          width: 8,
-                          height: 8,
-                          borderRadius: '50%',
-                          display: 'inline-block',
-                          flexShrink: 0,
-                          backgroundColor:
-                            p.connectionStatus?.connected === true
-                              ? '#52c41a'
-                              : p.connectionStatus?.connected === null
-                                ? '#d9d9d9'
-                                : '#ff4d4f',
-                        }}
-                      />
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {p.name}
-                      </span>
-                    </div>
-                  ))}
-              </div>
-            )}
           </div>
         </Sider>
 
