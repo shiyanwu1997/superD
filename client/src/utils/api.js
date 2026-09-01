@@ -65,11 +65,8 @@ const checkStatusApi = axios.create({
   timeout: 6000, // 适度延长连接状态检查超时时间
 });
 
-// 为api实例添加拦截器
-api.interceptors.request.use(createRequestLogger('API'));
-api.interceptors.request.use(authInterceptor);
-// 401 自动跳转登录
-api.interceptors.response.use(createResponseLogger('API'), (error) => {
+// 401 自动跳转登录（两个实例共用，避免 checkStatusApi 吞掉 401 导致用户无法回到登录页）
+const unauthorizedInterceptor = (error) => {
   if (error.response?.status === 401) {
     localStorage.removeItem('token');
     if (window.location.pathname !== '/login') {
@@ -78,13 +75,18 @@ api.interceptors.response.use(createResponseLogger('API'), (error) => {
     error._handled = true;
   }
   return Promise.reject(error);
-});
+};
+
+// 为api实例添加拦截器
+api.interceptors.request.use(createRequestLogger('API'));
+api.interceptors.request.use(authInterceptor);
+api.interceptors.response.use(createResponseLogger('API'), unauthorizedInterceptor);
 api.interceptors.response.use(null, createErrorLogger('API'));
 
 // 为checkStatusApi实例添加拦截器
 checkStatusApi.interceptors.request.use(createRequestLogger('状态检查'));
 checkStatusApi.interceptors.request.use(authInterceptor);
-checkStatusApi.interceptors.response.use(createResponseLogger('状态检查'));
+checkStatusApi.interceptors.response.use(createResponseLogger('状态检查'), unauthorizedInterceptor);
 checkStatusApi.interceptors.response.use(null, createErrorLogger('状态检查'));
 
 // 获取项目列表
