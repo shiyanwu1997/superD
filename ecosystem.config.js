@@ -12,6 +12,7 @@ module.exports = {
       error_file: '/opt/superD/logs/backend-error.log',
       out_file: '/opt/superD/logs/backend-out.log',
       merge_logs: true,
+      // 以下两项依赖 pm2-logrotate 模块（pm2 install pm2-logrotate），核心 pm2 不识别
       max_size: '10M',
       retain: 5,
       env: {

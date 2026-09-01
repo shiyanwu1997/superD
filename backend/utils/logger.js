@@ -14,8 +14,12 @@ const LOG_LEVELS = {
   FATAL: 4
 };
 
-// 当前日志级别
-const currentLevel = process.env.LOG_LEVEL || LOG_LEVELS.INFO;
+// 当前日志级别（环境变量是字符串，必须映射为数字再比较）
+const envLevelName = (process.env.LOG_LEVEL || 'INFO').toUpperCase();
+const currentLevel = LOG_LEVELS[envLevelName] !== undefined ? LOG_LEVELS[envLevelName] : LOG_LEVELS.INFO;
+
+// 单个日志文件大小上限，超过后轮转为 .1（避免无限增长）
+const MAX_LOG_SIZE = 10 * 1024 * 1024;
 
 // 日志文件路径
 const logDir = path.join(__dirname, '../logs');
@@ -59,17 +63,28 @@ const formatMessage = (level, message, data = null, req = null) => {
 };
 
 /**
- * 写入日志到文件
+ * 写入日志到文件（超过大小上限时先轮转为 .1）
  * @param {string} filePath - 文件路径
  * @param {string} message - 日志消息
  */
 const writeToFile = (filePath, message) => {
+  try {
+    if (fs.existsSync(filePath) && fs.statSync(filePath).size >= MAX_LOG_SIZE) {
+      fs.renameSync(filePath, filePath + '.1');
+    }
+  } catch (err) {
+    console.error('日志轮转失败:', err);
+  }
   fs.appendFile(filePath, message + '\n', (err) => {
     if (err) {
       console.error('写入日志文件失败:', err);
     }
   });
 };
+
+// SLB/负载均衡健康检查探针特征：HEAD 方法打根路径。每次探测写 2 行日志，
+// 480 次/分钟是 access.log 无限增长的独立原因，直接跳过。
+const isHealthProbe = (req) => req.method === 'HEAD' && (req.path === '/' || req.originalUrl === '/');
 
 /**
  * 日志工具类
@@ -159,6 +174,7 @@ class Logger {
    * @param {Object} req - 请求对象
    */
   static logRequest(req) {
+    if (isHealthProbe(req)) return;
     if (LOG_LEVELS.INFO >= currentLevel) {
       const message = 'Incoming request';
       const data = {
@@ -179,6 +195,7 @@ class Logger {
    * @param {Object} body - 响应体
    */
   static logResponse(req, res, duration, body = null) {
+    if (isHealthProbe(req)) return;
     if (LOG_LEVELS.INFO >= currentLevel) {
       const message = `Response sent (${duration}ms)`;
       const data = { statusCode: res.statusCode, responseBytes: body ? Buffer.byteLength(String(body)) : 0 };
