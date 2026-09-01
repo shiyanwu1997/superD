@@ -68,22 +68,13 @@ router.get('/api/projects/:projectId/status', authMiddleware.verifyToken, authMi
       throw new ApiError(404, '项目不存在');
     }
 
+    // checkConnectionStatus 内部已捕获错误并返回 {connected:false}，无需重试；
+    // 这里仅兜底从未预期的异常，同样快速失败
     let connectionStatus;
-    const maxRetries = 2;
-    let retryCount = 0;
-
-    while (retryCount <= maxRetries) {
-      try {
-        connectionStatus = await supervisorService.checkConnectionStatus(parseInt(projectId));
-        break;
-      } catch (err) {
-        retryCount++;
-        if (retryCount > maxRetries) {
-          connectionStatus = { connected: false, error: err.message };
-          break;
-        }
-        await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
-      }
+    try {
+      connectionStatus = await supervisorService.checkConnectionStatus(parseInt(projectId));
+    } catch (err) {
+      connectionStatus = { connected: false, error: err.message };
     }
 
     res.json({ connectionStatus });
@@ -161,6 +152,9 @@ router.put('/api/projects/:id', authMiddleware.verifyToken, authMiddleware.requi
       throw new ApiError(400, '项目不存在或名称已存在');
     }
 
+    // Supervisor 地址/凭据可能已变更，清除该项目的进程缓存
+    supervisorService.clearProcessCache(parseInt(id));
+
     res.json(sanitizeProject(updatedProject));
   } catch (error) {
     if (!(error instanceof ApiError)) {
@@ -178,6 +172,7 @@ router.delete('/api/projects/:id', authMiddleware.verifyToken, authMiddleware.re
     const success = await db.deleteProject(parseInt(id));
 
     if (success) {
+      supervisorService.clearProcessCache(parseInt(id));
       res.json({ success: true, message: '项目删除成功' });
     } else {
       throw new ApiError(404, '项目不存在');
