@@ -111,3 +111,33 @@ describe('ProjectSidebar 导航', () => {
     expect(screen.getByTestId('location')).toHaveTextContent('/programs');
   });
 });
+
+describe('ProjectSidebar 搜索', () => {
+  test('输入关键字过滤机器并自动展开分组', () => {
+    renderSidebar();
+    fireEvent.change(screen.getByPlaceholderText('搜索机器名称或描述'), {
+      target: { value: 'gfxcc' },
+    });
+    expect(screen.getByText('gfxcc-新')).toBeInTheDocument();
+    expect(screen.queryByText('mxcc-主控')).not.toBeInTheDocument();
+    expect(screen.queryByText('standalone')).not.toBeInTheDocument();
+  });
+
+  test('搜索命中无分组的机器时未分组区可见', () => {
+    renderSidebar();
+    fireEvent.change(screen.getByPlaceholderText('搜索机器名称或描述'), {
+      target: { value: 'standalone' },
+    });
+    expect(screen.getByText('standalone')).toBeInTheDocument();
+  });
+});
+
+describe('ProjectSidebar 收窄态', () => {
+  test('collapsed=true 时搜索框隐藏，Menu 进入 inlineCollapsed', () => {
+    const { container } = renderSidebar({ collapsed: true });
+    expect(screen.queryByPlaceholderText('搜索机器名称或描述')).not.toBeInTheDocument();
+    expect(container.querySelector('.ant-menu-inline-collapsed')).not.toBeNull();
+    // 顶层项仍渲染（全部机器）
+    expect(container.textContent).toContain('全部机器');
+  });
+});
