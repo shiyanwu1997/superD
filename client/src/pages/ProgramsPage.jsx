@@ -88,6 +88,8 @@ const ProgramsPage = () => {
   const prevProjectRef = useRef(null);
   // 已确认删除的项目，避免重复提示/循环刷新
   const deletedProjectRef = useRef(null);
+  // 递增的请求序号：响应返回时若已有更新的请求发出，丢弃本次结果（防止快速切换项目时旧响应覆盖新数据）
+  const fetchSeqRef = useRef(0);
 
   // 操作Loading状态
   const [actionLoading, setActionLoading] = useState({});
@@ -239,8 +241,9 @@ const ProgramsPage = () => {
     }
   }, [getDelayedConnectionStatus, fetchGroups]);
 
+  // showLoading 参数保留以对齐 fetchPrograms 签名，当前实现无需 loading 状态
+  // eslint-disable-next-line no-unused-vars
   const fetchAllProgramsData = async (showLoading = true) => {
-    // eslint-disable-line no-unused-vars
     try {
       const data = await getAllPrograms();
       const uniquePrograms = [...new Map(data.map((program) => [program.id, program])).values()];
@@ -261,12 +264,15 @@ const ProgramsPage = () => {
     if (!pid) return;
     const projectIdStr = String(pid);
     const projectIdNum = Number(pid);
+    const seq = ++fetchSeqRef.current;
+    const isStale = () => seq !== fetchSeqRef.current;
     try {
       const isNewProject = prevProjectRef.current !== projectIdNum;
       prevProjectRef.current = projectIdNum;
 
       if (showLoading) setLoading(true);
       const data = await getProgramsByProject(projectIdStr);
+      if (isStale()) return; // 已有更新的请求，丢弃旧响应
       const uniquePrograms = [...new Map(data.map((program) => [program.id, program])).values()];
 
       // 静默刷新：仅更新状态字段，不触发loading闪光
@@ -288,6 +294,8 @@ const ProgramsPage = () => {
         )
       );
     } catch (err) {
+      // 旧请求的报错不影响当前项目
+      if (isStale()) return;
       // 项目已被删除：跳回列表页并刷新项目树，避免轮询无限报错
       const errText = `${err.response?.data?.data || ''} ${err.message || ''}`;
       if (errText.includes('项目不存在')) {
@@ -312,7 +320,7 @@ const ProgramsPage = () => {
         )
       );
     } finally {
-      if (showLoading) setLoading(false);
+      if (showLoading && !isStale()) setLoading(false);
     }
   };
 
