@@ -22,24 +22,30 @@ const xmlrpcExceptions = (func) => {
     } catch (error) {
       // 记录原始错误
       Logger.error('XML-RPC调用异常', error);
-      
+
+      // 保留原始 code/faultCode/faultString，供上层结构化判断而非字符串匹配
+      const wrap = (message) => Object.assign(
+        new Error(message),
+        { code: error.code, faultCode: error.faultCode, faultString: error.faultString, cause: error }
+      );
+
       // 分类处理不同类型的错误
       if (error.code === 'ECONNREFUSED') {
-        throw new Error(`无法连接到Supervisor服务: ${error.message}`);
+        throw wrap(`无法连接到Supervisor服务: ${error.message}`);
       } else if (error.code === 'ETIMEDOUT') {
-        throw new Error(`连接Supervisor服务超时: ${error.message}`);
+        throw wrap(`连接Supervisor服务超时: ${error.message}`);
       } else if (error.message && error.message.includes('No such file')) {
-        throw new Error(`Supervisor配置文件不存在: ${error.message}`);
+        throw wrap(`Supervisor配置文件不存在: ${error.message}`);
       } else if (error.message && error.message.includes('Authentication failed')) {
-        throw new Error(`Supervisor认证失败: ${error.message}`);
+        throw wrap(`Supervisor认证失败: ${error.message}`);
       } else if (error.message && error.message.includes('SPAWN_ERROR')) {
-        throw new Error(`程序启动失败: ${error.message}`);
+        throw wrap(`程序启动失败: ${error.message}`);
       } else if (error.faultCode) {
         // 处理XML-RPC Fault错误
-        throw new Error(`Supervisor错误 (${error.faultCode}): ${error.faultString}`);
+        throw wrap(`Supervisor错误 (${error.faultCode}): ${error.faultString}`);
       } else {
         // 其他类型的错误
-        throw new Error(`与Supervisor通信失败: ${error.message}`);
+        throw wrap(`与Supervisor通信失败: ${error.message}`);
       }
     }
   };
@@ -235,6 +241,7 @@ const startProcess = xmlrpcExceptions(async (projectId, programName) => {
     return { success: false, message: `程序 ${programName} 启动超时，最后已知状态: ${lastKnownState}` };
   } catch (error) {
     Logger.error(`启动程序失败 (${programName}):`, error);
+    clearProcessCache(projectId);
     return { success: false, message: `启动失败: ${error.message}` };
   }
 });
@@ -283,6 +290,7 @@ const stopProcess = xmlrpcExceptions(async (projectId, programName) => {
     throw new Error('程序 ' + programName + ' 停止超时，最后已知状态: ' + finalState);
   } catch (error) {
     Logger.error('停止程序失败 (' + programName + '):', error);
+    clearProcessCache(projectId);
     return { success: false, message: '停止失败: ' + error.message };
   }
 });
@@ -369,6 +377,8 @@ const restartProcess = xmlrpcExceptions(async (projectId, programName) => {
     throw new Error('程序 ' + programName + ' 重启超时，最后已知状态: ' + finalState);
   } catch (error) {
     Logger.error('重启程序失败 (' + programName + '):', error);
+    // 失败时程序实际状态可能已改变（如 stop 后 start 失败），清缓存避免轮询读到旧状态
+    clearProcessCache(projectId);
     return { success: false, message: '重启失败: ' + error.message };
   }
 });
