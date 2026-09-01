@@ -38,9 +38,6 @@ router.post('/api/login', loginLimiter, async (req, res, next) => {
 
     const token = authMiddleware.generateToken(user);
 
-    req.session.token = token;
-    req.session.user = user;
-
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     res.set('Pragma', 'no-cache');
     res.set('Expires', '0');
@@ -57,29 +54,17 @@ router.post('/api/login', loginLimiter, async (req, res, next) => {
 
 // 退出登录
 router.get('/logout', (req, res) => {
-  req.session.destroy();
+  req.session?.destroy(() => {});
   res.redirect('/login');
 });
 
 // API: 获取用户信息
 router.get('/api/user', authMiddleware.verifyToken, async (req, res, next) => {
   try {
-    let userId, username, roleId;
-
-    if (req.session.user) {
-      userId = req.session.user.id;
-      username = req.session.user.username;
-      roleId = req.session.user.roleId;
-    } else if (req.user) {
-      userId = req.user.userId;
-      username = req.user.username;
-      roleId = req.user.roleId;
-    }
-
     res.json({
-      id: userId,
-      username: username,
-      roleId: roleId
+      id: req.user.userId,
+      username: req.user.username,
+      roleId: req.user.roleId
     });
   } catch (error) {
     if (error instanceof ApiError) {

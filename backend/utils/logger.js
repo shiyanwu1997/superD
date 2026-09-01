@@ -41,7 +41,7 @@ const formatMessage = (level, message, data = null, req = null) => {
   
   // 添加请求信息
   if (req) {
-    logMsg += ` | Request: ${req.method} ${req.url}`;
+    logMsg += ` | Request: ${req.method} ${req.path}`;
     if (req.ip) {
       logMsg += ` | IP: ${req.ip}`;
     }
@@ -162,9 +162,8 @@ class Logger {
     if (LOG_LEVELS.INFO >= currentLevel) {
       const message = 'Incoming request';
       const data = {
-        headers: req.headers,
-        query: req.query,
-        body: req.body
+        contentType: req.get('content-type') || null,
+        contentLength: req.get('content-length') || null
       };
       const logMsg = formatMessage('INFO', message, data, req);
       console.log(logMsg);
@@ -182,7 +181,7 @@ class Logger {
   static logResponse(req, res, duration, body = null) {
     if (LOG_LEVELS.INFO >= currentLevel) {
       const message = `Response sent (${duration}ms)`;
-      const data = body ? { body } : null;
+      const data = { statusCode: res.statusCode, responseBytes: body ? Buffer.byteLength(String(body)) : 0 };
       const logMsg = formatMessage('INFO', message, data, req);
       console.log(logMsg);
       writeToFile(accessLogPath, logMsg);

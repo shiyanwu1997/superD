@@ -1,8 +1,10 @@
 const { Server } = require('socket.io');
-const jwt = require('jsonwebtoken');
 const { getProcessStdoutLog, getProcessStderrLog, callRpc } = require('./supervisorService');
-const { SERVER_CONFIG } = require('../config');
+const { CORS_CONFIG } = require('../config');
 const Logger = require('../utils/logger');
+const db = require('../models/db');
+const { parseProgramId } = require('../utils/programId');
+const { authenticateBearerToken } = require('../middleware/auth');
 
 class SocketServer {
   constructor(server) {
@@ -13,16 +15,29 @@ class SocketServer {
         credentials: true,
         methods: ['GET', 'POST']
       },
+      allowRequest: (req, callback) => {
+        const origin = req.headers.origin;
+        let isSameOrigin = false;
+        try {
+          isSameOrigin = origin ? new URL(origin).host === req.headers.host : false;
+        } catch {
+          isSameOrigin = false;
+        }
+        callback(null, !origin || isSameOrigin || CORS_CONFIG.ORIGINS.includes(origin));
+      },
       transports: ['polling', 'websocket'],
       allowEIO3: true
     });
 
-    // JWT 认证中间件
-    this.io.use((socket, next) => {
+    // JWT 与服务 API 令牌认证中间件。
+    this.io.use(async (socket, next) => {
       const token = socket.handshake.auth?.token || socket.handshake.query?.token;
       if (!token) return next(new Error('Authentication required'));
       try {
-        jwt.verify(token, SERVER_CONFIG.JWT_SECRET);
+        const authenticated = await authenticateBearerToken(token);
+        socket.data.user = authenticated.user;
+        socket.data.authType = authenticated.authType;
+        socket.data.apiToken = authenticated.apiToken;
         next();
       } catch {
         next(new Error('Invalid token'));
@@ -47,8 +62,26 @@ class SocketServer {
         isReducedInterval: false // 是否处于减少轮询间隔的状态
       });
       
-      socket.on('start_log_tail', (data) => {
-        this.startLogTail(socket.id, data.programId, data.logType);
+      socket.on('start_log_tail', async (data = {}) => {
+        try {
+          if (!['stdout', 'stderr'].includes(data.logType)) {
+            throw new Error('无效的日志类型');
+          }
+          if (socket.data.authType === 'api_token' && !socket.data.apiToken.scopes.includes('*') && !socket.data.apiToken.scopes.includes('logs:read')) {
+            throw new Error('API 令牌缺少范围: logs:read');
+          }
+          parseProgramId(data.programId);
+          if (!(await db.checkUserSpecificProgramPermission(socket.data.user.userId, data.programId))) {
+            throw new Error('没有权限访问此程序日志');
+          }
+          this.startLogTail(socket.id, data.programId, data.logType);
+        } catch (error) {
+          socket.emit('log_error', {
+            programId: data.programId,
+            logType: data.logType,
+            error: error.message
+          });
+        }
       });
       
       socket.on('stop_log_tail', () => {

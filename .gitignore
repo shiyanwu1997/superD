@@ -3,8 +3,9 @@ dist/
 .env
 *.log
 logs/
-data/*.db
-data/*.db-*
+backend/data/
 .DS_Store
 .idea/
 *.local
+backend/cookie.txt
+local.superd.plist

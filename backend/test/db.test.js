@@ -1,8 +1,7 @@
 /**
  * 数据库连接测试
  */
-const db = require('../models/db');
-const Logger = require('../utils/logger');
+process.env.STORAGE_TYPE = 'mysql';
 
 // 模拟Logger
 jest.mock('../utils/logger', () => ({
@@ -18,7 +17,8 @@ jest.mock('mysql2/promise', () => {
     beginTransaction: jest.fn(),
     commit: jest.fn(),
     rollback: jest.fn(),
-    release: jest.fn()
+    release: jest.fn(),
+    end: jest.fn()
   };
   
   const mockPool = {
@@ -28,9 +28,12 @@ jest.mock('mysql2/promise', () => {
   };
   
   return {
-    createPool: jest.fn().mockReturnValue(mockPool)
+    createPool: jest.fn().mockReturnValue(mockPool),
+    createConnection: jest.fn().mockResolvedValue(mockConnection)
   };
 });
+
+const db = require('../models/db');
 
 describe('数据库连接测试', () => {
   beforeEach(() => {

@@ -125,7 +125,7 @@ const callRpc = xmlrpcExceptions(async (projectId, method, params = []) => {
         }
         reject(error);
       } else {
-        Logger.debug(`RPC调用成功 (${method})`, { result: value });
+        Logger.debug(`RPC调用成功 (${method})`);
         resolve(value);
       }
     });

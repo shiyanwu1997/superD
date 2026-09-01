@@ -36,9 +36,21 @@ const app = express();
 app.use(helmet({ contentSecurityPolicy: false })); // CSP 由前端控制
 app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
 app.use(bodyParser.json({ limit: '10mb' }));
-app.use(cors({
-  origin: true,
-  credentials: true
+
+const allowedOrigins = new Set(CORS_CONFIG.ORIGINS);
+app.use(cors((req, callback) => {
+  const origin = req.get('Origin');
+  let isSameOrigin = false;
+  try {
+    isSameOrigin = origin ? new URL(origin).host === req.get('host') : false;
+  } catch {
+    isSameOrigin = false;
+  }
+
+  callback(null, {
+    origin: !origin || isSameOrigin || allowedOrigins.has(origin),
+    credentials: true
+  });
 }));
 
 
@@ -67,9 +79,32 @@ app.use((req, res, next) => {
 app.use(session({
   secret: SERVER_CONFIG.SESSION_SECRET,  // 使用配置文件中的密钥
   resave: false,
-  saveUninitialized: true,
-  cookie: { secure: process.env.NODE_ENV === 'production' }
+  saveUninitialized: false,
+  cookie: {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 60 * 60 * 1000
+  }
 }));
+
+// 服务 API 令牌的调用审计。认证中间件会在路由执行前填充 req.apiToken。
+app.use((req, res, next) => {
+  const startedAt = Date.now();
+  res.on('finish', () => {
+    if (req.authType !== 'api_token' || !req.apiToken) return;
+    db.createApiAuditEvent({
+      apiTokenId: req.apiToken.id,
+      userId: req.user?.userId,
+      method: req.method,
+      path: req.path,
+      statusCode: res.statusCode,
+      durationMs: Date.now() - startedAt,
+      ip: req.ip
+    }).catch(error => Logger.error('记录 API 调用审计失败', error));
+  });
+  next();
+});
 
 // 生产模式：托管前端静态文件（与API同端口，消除CORS）
 const clientDist = path.join(__dirname, '../client/dist');

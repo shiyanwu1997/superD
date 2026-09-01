@@ -48,7 +48,7 @@ function buildProgramInfo(process, projectId) {
 }
 
 // API: 获取项目下的程序列表
-router.get('/api/projects/:projectId/programs', authMiddleware.verifyToken, async (req, res, next) => {
+router.get('/api/projects/:projectId/programs', authMiddleware.verifyToken, authMiddleware.requireScope('programs:read'), async (req, res, next) => {
   try {
     const { projectId } = req.params;
     const userId = req.session.user?.id || req.user.userId;
@@ -108,7 +108,7 @@ router.get('/api/projects/:projectId/programs', authMiddleware.verifyToken, asyn
 });
 
 // API: 获取所有程序列表
-router.get('/api/programs', authMiddleware.verifyToken, async (req, res, next) => {
+router.get('/api/programs', authMiddleware.verifyToken, authMiddleware.requireScope('programs:read'), async (req, res, next) => {
   try {
     const userId = req.session.user?.id || req.user.userId;
     const userProjects = await db.getUserProjects(userId);
@@ -153,7 +153,7 @@ router.get('/api/programs', authMiddleware.verifyToken, async (req, res, next) =
 });
 
 // API: 获取程序详情
-router.get('/api/programs/:programId', authMiddleware.verifyToken, async (req, res, next) => {
+router.get('/api/programs/:programId', authMiddleware.verifyToken, authMiddleware.requireScope('programs:read'), authMiddleware.requireScope('logs:read'), async (req, res, next) => {
   try {
     const { programId } = req.params;
     const userId = req.session.user?.id || req.user.userId;
@@ -194,7 +194,7 @@ router.get('/api/programs/:programId', authMiddleware.verifyToken, async (req, r
 });
 
 // API: 获取程序标准输出日志
-router.get('/api/programs/:programId/stdout', authMiddleware.verifyToken, async (req, res, next) => {
+router.get('/api/programs/:programId/stdout', authMiddleware.verifyToken, authMiddleware.requireScope('logs:read'), async (req, res, next) => {
   try {
     const { programId } = req.params;
     const { offset = 0, length = 10000 } = req.query;
@@ -217,7 +217,7 @@ router.get('/api/programs/:programId/stdout', authMiddleware.verifyToken, async 
 });
 
 // API: 获取程序标准错误日志
-router.get('/api/programs/:programId/stderr', authMiddleware.verifyToken, async (req, res, next) => {
+router.get('/api/programs/:programId/stderr', authMiddleware.verifyToken, authMiddleware.requireScope('logs:read'), async (req, res, next) => {
   try {
     const { programId } = req.params;
     const { offset = 0, length = 10000 } = req.query;
@@ -240,14 +240,13 @@ router.get('/api/programs/:programId/stderr', authMiddleware.verifyToken, async 
 });
 
 // API: 启动所有程序
-router.post('/api/projects/:projectId/programs/start-all', authMiddleware.verifyToken, async (req, res, next) => {
+router.post('/api/projects/:projectId/programs/start-all', authMiddleware.verifyToken, authMiddleware.requireScope('programs:write'), async (req, res, next) => {
   try {
     const { projectId } = req.params;
     const userId = req.session.user?.id || req.user.userId;
     const projectIdInt = parseInt(projectId);
 
-    if (!(await db.checkUserProjectPermission(userId, projectIdInt)) &&
-        !(await db.getUserProgramPermissions(userId)).some(p => p.programId.startsWith(projectId + '-'))) {
+    if (!(await db.checkUserProjectPermission(userId, projectIdInt))) {
       throw new ApiError(403, '没有权限访问此项目');
     }
 
@@ -262,15 +261,13 @@ router.post('/api/projects/:projectId/programs/start-all', authMiddleware.verify
 });
 
 // API: 停止所有程序
-router.post('/api/projects/:projectId/programs/stop-all', authMiddleware.verifyToken, async (req, res, next) => {
+router.post('/api/projects/:projectId/programs/stop-all', authMiddleware.verifyToken, authMiddleware.requireScope('programs:write'), async (req, res, next) => {
   try {
     const { projectId } = req.params;
     const userId = req.session.user?.id || req.user.userId;
     const projectIdInt = parseInt(projectId);
 
-    const hasProjectPerm = await db.checkUserProjectPermission(userId, projectIdInt);
-    const programPerms = await db.getUserProgramPermissions(userId);
-    if (!hasProjectPerm && !programPerms.some(p => p.programId.startsWith(projectId + '-'))) {
+    if (!(await db.checkUserProjectPermission(userId, projectIdInt))) {
       throw new ApiError(403, '没有权限访问此项目');
     }
 
@@ -285,15 +282,13 @@ router.post('/api/projects/:projectId/programs/stop-all', authMiddleware.verifyT
 });
 
 // API: 重启所有程序
-router.post('/api/projects/:projectId/programs/restart-all', authMiddleware.verifyToken, async (req, res, next) => {
+router.post('/api/projects/:projectId/programs/restart-all', authMiddleware.verifyToken, authMiddleware.requireScope('programs:write'), async (req, res, next) => {
   try {
     const { projectId } = req.params;
     const userId = req.session.user?.id || req.user.userId;
     const projectIdInt = parseInt(projectId);
 
-    const hasProjectPerm = await db.checkUserProjectPermission(userId, projectIdInt);
-    const programPerms = await db.getUserProgramPermissions(userId);
-    if (!hasProjectPerm && !programPerms.some(p => p.programId.startsWith(projectId + '-'))) {
+    if (!(await db.checkUserProjectPermission(userId, projectIdInt))) {
       throw new ApiError(403, '没有权限访问此项目');
     }
 
@@ -308,7 +303,7 @@ router.post('/api/projects/:projectId/programs/restart-all', authMiddleware.veri
 });
 
 // API: 重载配置
-router.post('/api/projects/:projectId/reload', authMiddleware.verifyToken, async (req, res, next) => {
+router.post('/api/projects/:projectId/reload', authMiddleware.verifyToken, authMiddleware.requireScope('programs:write'), async (req, res, next) => {
   try {
     const { projectId } = req.params;
     const userId = req.session.user?.id || req.user.userId;
@@ -324,7 +319,7 @@ router.post('/api/projects/:projectId/reload', authMiddleware.verifyToken, async
 });
 
 // API: 启动程序
-router.post('/api/programs/:programId/start', authMiddleware.verifyToken, async (req, res, next) => {
+router.post('/api/programs/:programId/start', authMiddleware.verifyToken, authMiddleware.requireScope('programs:write'), async (req, res, next) => {
   try {
     const { programId } = req.params;
     const userId = req.session.user?.id || req.user.userId;
@@ -351,7 +346,7 @@ router.post('/api/programs/:programId/start', authMiddleware.verifyToken, async 
 });
 
 // API: 停止程序
-router.post('/api/programs/:programId/stop', authMiddleware.verifyToken, async (req, res, next) => {
+router.post('/api/programs/:programId/stop', authMiddleware.verifyToken, authMiddleware.requireScope('programs:write'), async (req, res, next) => {
   try {
     const { programId } = req.params;
     const userId = req.session.user?.id || req.user.userId;
@@ -377,7 +372,7 @@ router.post('/api/programs/:programId/stop', authMiddleware.verifyToken, async (
 });
 
 // API: 重启程序
-router.post('/api/programs/:programId/restart', authMiddleware.verifyToken, async (req, res, next) => {
+router.post('/api/programs/:programId/restart', authMiddleware.verifyToken, authMiddleware.requireScope('programs:write'), async (req, res, next) => {
   const { programId } = req.params;
   const userId = req.session.user?.id || req.user.userId;
 

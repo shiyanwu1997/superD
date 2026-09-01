@@ -7,7 +7,7 @@ const { ApiError } = require('../utils/errors');
 const Logger = require('../utils/logger');
 
 // API: 获取用户可访问的项目列表
-router.get('/api/projects', authMiddleware.verifyToken, async (req, res, next) => {
+router.get('/api/projects', authMiddleware.verifyToken, authMiddleware.requireScope('projects:read'), async (req, res, next) => {
   try {
     const userId = req.session.user?.id || req.user.userId;
 
@@ -48,7 +48,7 @@ router.get('/api/projects', authMiddleware.verifyToken, async (req, res, next) =
 });
 
 // API: 检查单个项目的连接状态
-router.get('/api/projects/:projectId/status', authMiddleware.verifyToken, async (req, res, next) => {
+router.get('/api/projects/:projectId/status', authMiddleware.verifyToken, authMiddleware.requireScope('projects:read'), async (req, res, next) => {
   try {
     const { projectId } = req.params;
     const userId = req.session.user?.id || req.user.userId;
@@ -114,7 +114,7 @@ function sanitizeProject(project) {
 }
 
 // API: 创建新项目（仅管理员）
-router.post('/api/projects', authMiddleware.verifyToken, authMiddleware.checkAdmin, async (req, res, next) => {
+router.post('/api/projects', authMiddleware.verifyToken, authMiddleware.requireScope('projects:write'), authMiddleware.checkSuperAdmin, async (req, res, next) => {
   try {
     const { name, description, host, port, username, password } = req.body;
 
@@ -141,7 +141,7 @@ router.post('/api/projects', authMiddleware.verifyToken, authMiddleware.checkAdm
 });
 
 // API: 更新项目（仅管理员）
-router.put('/api/projects/:id', authMiddleware.verifyToken, authMiddleware.checkAdmin, async (req, res, next) => {
+router.put('/api/projects/:id', authMiddleware.verifyToken, authMiddleware.requireScope('projects:write'), authMiddleware.checkSuperAdmin, async (req, res, next) => {
   try {
     const { id } = req.params;
     const { name, description, host, port, username, password } = req.body;
@@ -171,7 +171,7 @@ router.put('/api/projects/:id', authMiddleware.verifyToken, authMiddleware.check
 });
 
 // API: 删除项目（仅管理员）
-router.delete('/api/projects/:id', authMiddleware.verifyToken, authMiddleware.checkAdmin, async (req, res, next) => {
+router.delete('/api/projects/:id', authMiddleware.verifyToken, authMiddleware.requireScope('projects:write'), authMiddleware.checkSuperAdmin, async (req, res, next) => {
   try {
     const { id } = req.params;
 

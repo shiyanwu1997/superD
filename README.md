@@ -7,7 +7,7 @@
 | 层级 | 技术 |
 |------|------|
 | 前端 | React 18, Vite 7, Ant Design 5, React Router 7, xterm.js 6, Socket.io-client, TanStack Query |
-| 后端 | Node.js, Express 5, Socket.io 4, JWT + Session 认证, bcrypt, xmlrpc, helmet |
+| 后端 | Node.js, Express 5, Socket.io 4, JWT + 服务 API 令牌认证, bcrypt, xmlrpc, helmet |
 | 存储 | **SQLite**（默认，零配置）/ MySQL（可选） |
 | 部署 | PM2 + ecosystem.config.js |
 
@@ -51,7 +51,7 @@
 - 连接状态检查失败仅重试 1 次
 
 ### 安全
-- JWT + Session 双重认证
+- JWT 登录与可撤销的服务 API 令牌认证
 - bcrypt 密码哈希，AES-256 加密 Supervisor 密码
 - helmet 安全头，登录速率限制（5 次/分钟/IP）
 - 所有密钥通过 `.env` 文件注入，无硬编码
@@ -172,7 +172,45 @@ superD/
 └── .gitignore
 ```
 
-## API 端点 (41个)
+## 面向服务调用的 API
+
+接口可独立于网页长期使用。服务端调用应使用 `Authorization: Bearer <API_TOKEN>`，令牌以 `sd_` 开头；不要使用网页登录返回的短期 JWT。
+
+1. 超级管理员先创建一个用于集成的用户，并按该用户需要的机器/程序配置权限。
+2. 使用管理员 JWT 调用 `POST /api/api-tokens` 创建服务令牌。明文令牌只在创建响应中返回一次，数据库只保存 SHA-256 摘要。
+3. 调用方把令牌存入其密钥管理系统，以 `Authorization: Bearer ...` 访问 `/api/*`。权限必须同时满足令牌 scope 和绑定用户的项目/程序权限。
+4. 轮换时先创建新令牌，完成调用方切换后再撤销旧令牌。所有服务令牌 HTTP 调用都会写入审计记录。
+
+创建令牌示例（管理员 JWT 仅用于管理令牌，不应交给业务服务）：
+
+```bash
+curl -X POST http://localhost:6002/api/api-tokens \
+  -H 'Authorization: Bearer <ADMIN_JWT>' \
+  -H 'Content-Type: application/json' \
+  -d '{"userId": 3, "name": "alerting-service", "scopes": ["projects:read", "programs:read", "programs:write", "logs:read"]}'
+```
+
+服务调用示例：
+
+```bash
+curl http://localhost:6002/api/projects \
+  -H 'Authorization: Bearer sd_<SERVICE_TOKEN>'
+```
+
+令牌管理接口仅限超级管理员（服务令牌还必须包含 `tokens:manage`）：
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/api-tokens` | 查看令牌元数据，不返回令牌摘要或明文 |
+| POST | `/api/api-tokens` | 创建令牌；`userId`、`name`、`scopes` 必填，默认 90 天、最长 365 天 |
+| DELETE | `/api/api-tokens/:id` | 立即撤销令牌 |
+| GET | `/api/api-audit-events?limit=100` | 查看最近服务 API 调用审计，`limit` 最大 500 |
+
+支持的 scope：`projects:read`、`projects:write`、`groups:read`、`groups:write`、`programs:read`、`programs:write`、`logs:read`、`users:read`、`users:write`、`tokens:manage`。`*` 为全部范围，仅应在受控的管理员服务中使用。JWT 调用继续按现有角色和项目权限工作，不受 scope 限制。
+
+API 契约以 `/api` 为稳定 v1 基线，可通过 `GET /api/version` 查询当前版本。新增字段和新增接口可直接使用；已有字段和接口如需不兼容调整将保留兼容期并在发布说明中标记。调用方应基于 HTTP 状态码和 `message` 处理失败，不能依赖未文档化字段。
+
+## API 端点
 
 ### 认证
 | 方法 | 路径 | 说明 |

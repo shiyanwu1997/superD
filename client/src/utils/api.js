@@ -7,29 +7,31 @@ const baseAxiosConfig = {
   baseURL: import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : '/api',
   withCredentials: true,
   headers: {
-    'Content-Type': 'application/json'
-  }
+    'Content-Type': 'application/json',
+  },
 };
 
 const isDev = import.meta.env.DEV;
 
 const createRequestLogger = () => {
-  return config => {
+  return (config) => {
     if (isDev) console.log(`[API] ${config.method.toUpperCase()} ${config.url}`);
     return config;
   };
 };
 
 const createResponseLogger = () => {
-  return response => {
+  return (response) => {
     if (isDev) console.log(`[API] ${response.status} ${response.config.url}`);
     return response;
   };
 };
 
 const createErrorLogger = () => {
-  return error => {
-    console.error(`[API] ${error.config?.method?.toUpperCase()} ${error.config?.url} - ${error.response?.status || error.message}`);
+  return (error) => {
+    console.error(
+      `[API] ${error.config?.method?.toUpperCase()} ${error.config?.url} - ${error.response?.status || error.message}`
+    );
     return Promise.reject(error);
   };
 };
@@ -39,45 +41,44 @@ const createErrorLogger = () => {
  * @param {Object} config - axios配置对象
  * @returns {Object} 配置对象
  */
-const authInterceptor = config => {
+const authInterceptor = (config) => {
   // 从localStorage获取令牌（如果存在）
   const token = localStorage.getItem('token');
-  
+
   // 如果令牌存在，添加到请求头
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
-  
+
   return config;
 };
 
 // 创建主API实例
 const api = axios.create({
   ...baseAxiosConfig,
-  timeout: 28000 // 延长超时时间到28秒，以匹配后端优化后的启动检查时间
+  timeout: 28000, // 延长超时时间到28秒，以匹配后端优化后的启动检查时间
 });
 
 // 创建连接状态检查专用API实例
 const checkStatusApi = axios.create({
   ...baseAxiosConfig,
-  timeout: 6000 // 适度延长连接状态检查超时时间
+  timeout: 6000, // 适度延长连接状态检查超时时间
 });
 
 // 为api实例添加拦截器
 api.interceptors.request.use(createRequestLogger('API'));
 api.interceptors.request.use(authInterceptor);
 // 401 自动跳转登录
-api.interceptors.response.use(
-  createResponseLogger('API'),
-  (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem('token');
+api.interceptors.response.use(createResponseLogger('API'), (error) => {
+  if (error.response?.status === 401) {
+    localStorage.removeItem('token');
+    if (window.location.pathname !== '/login') {
       window.location.replace('/login');
-      error._handled = true;
     }
-    return Promise.reject(error);
+    error._handled = true;
   }
-);
+  return Promise.reject(error);
+});
 api.interceptors.response.use(null, createErrorLogger('API'));
 
 // 为checkStatusApi实例添加拦截器
@@ -94,18 +95,22 @@ export const getProjects = async () => {
 
 // 登录请求
 export const login = async (username, password) => {
-  const response = await api.post('/login', {
-    username,
-    password,
-  }, {
-    headers: {
-      'Content-Type': 'application/json'
+  const response = await api.post(
+    '/login',
+    {
+      username,
+      password,
     },
-    withCredentials: true,
-    validateStatus: function (status) {
-      return status >= 200 && status < 300; // 只接受2xx状态码
+    {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      withCredentials: true,
+      validateStatus: function (status) {
+        return status >= 200 && status < 300; // 只接受2xx状态码
+      },
     }
-  });
+  );
   return response.data;
 };
 

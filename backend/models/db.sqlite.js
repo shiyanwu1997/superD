@@ -341,6 +341,67 @@ const setProjectGroup = async (projectId, groupId) => {
   return true;
 };
 
+// ==================== 服务 API 令牌与审计 ====================
+
+function parseApiToken(row) {
+  if (!row) return null;
+  return {
+    ...row,
+    scopes: typeof row.scopes === 'string' ? JSON.parse(row.scopes) : row.scopes
+  };
+}
+
+const createApiToken = async (userId, name, tokenHash, scopes, expiresAt) => {
+  const result = db.prepare(
+    'INSERT INTO api_tokens (userId, name, tokenHash, scopes, expiresAt) VALUES (?, ?, ?, ?, ?)'
+  ).run(userId, name, tokenHash, JSON.stringify(scopes), expiresAt);
+  return parseApiToken(db.prepare('SELECT * FROM api_tokens WHERE id = ?').get(result.lastInsertRowid));
+};
+
+const getActiveApiTokenByHash = async (tokenHash) => {
+  const row = db.prepare(
+    "SELECT * FROM api_tokens WHERE tokenHash = ? AND revokedAt IS NULL AND datetime(expiresAt) > datetime('now')"
+  ).get(tokenHash);
+  return parseApiToken(row);
+};
+
+const getApiTokens = async () => {
+  const rows = db.prepare(`
+    SELECT t.id, t.userId, t.name, t.scopes, t.expiresAt, t.lastUsedAt, t.revokedAt, t.createdAt, u.username
+    FROM api_tokens t JOIN users u ON u.id = t.userId
+    ORDER BY t.createdAt DESC, t.id DESC
+  `).all();
+  return rows.map(parseApiToken);
+};
+
+const touchApiToken = async (tokenId) => {
+  db.prepare("UPDATE api_tokens SET lastUsedAt = datetime('now') WHERE id = ?").run(tokenId);
+};
+
+const revokeApiToken = async (tokenId) => {
+  const result = db.prepare(
+    "UPDATE api_tokens SET revokedAt = datetime('now') WHERE id = ? AND revokedAt IS NULL"
+  ).run(tokenId);
+  return result.changes > 0;
+};
+
+const createApiAuditEvent = async ({ apiTokenId, userId, method, path, statusCode, durationMs, ip }) => {
+  db.prepare(`
+    INSERT INTO api_audit_events (apiTokenId, userId, method, path, statusCode, durationMs, ip)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(apiTokenId, userId, method, path, statusCode, durationMs, ip || null);
+};
+
+const getApiAuditEvents = async (limit) => {
+  return db.prepare(`
+    SELECT e.*, t.name AS tokenName, u.username
+    FROM api_audit_events e
+    LEFT JOIN api_tokens t ON t.id = e.apiTokenId
+    LEFT JOIN users u ON u.id = e.userId
+    ORDER BY e.id DESC LIMIT ?
+  `).all(limit);
+};
+
 module.exports = {
   getUserByUsername,
   getUserById,
@@ -371,5 +432,12 @@ module.exports = {
   updateGroup,
   deleteGroup,
   getProjectsByGroup,
-  setProjectGroup
+  setProjectGroup,
+  createApiToken,
+  getActiveApiTokenByHash,
+  getApiTokens,
+  touchApiToken,
+  revokeApiToken,
+  createApiAuditEvent,
+  getApiAuditEvents
 };

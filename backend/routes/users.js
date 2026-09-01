@@ -5,9 +5,15 @@ const db = require('../models/db');
 const authMiddleware = require('../middleware/auth');
 const { ApiError } = require('../utils/errors');
 const { SECURITY_CONFIG } = require('../config');
+const { parseProgramId } = require('../utils/programId');
+
+function sanitizeUser(user) {
+  const { password, ...safeUser } = user;
+  return safeUser;
+}
 
 // API: 获取用户列表（根据角色权限返回不同的用户列表）
-router.get('/api/users', authMiddleware.verifyToken, async (req, res, next) => {
+router.get('/api/users', authMiddleware.verifyToken, authMiddleware.requireScope('users:read'), async (req, res, next) => {
   try {
     const currentUserId = req.session.user?.id || req.user.userId;
     const currentUser = await db.getUserById(currentUserId);
@@ -45,7 +51,7 @@ router.get('/api/users', authMiddleware.verifyToken, async (req, res, next) => {
         if (admin) createdByUsername = admin.username;
       }
       return {
-        ...user,
+        ...sanitizeUser(user),
         roleName: role ? role.name : '未知角色',
         projectPermissions: permissions,
         createdByUsername: createdByUsername
@@ -60,13 +66,16 @@ router.get('/api/users', authMiddleware.verifyToken, async (req, res, next) => {
 });
 
 // API: 创建新用户（仅管理员）
-router.post('/api/users', authMiddleware.verifyToken, authMiddleware.checkAdmin, async (req, res, next) => {
+router.post('/api/users', authMiddleware.verifyToken, authMiddleware.requireScope('users:write'), authMiddleware.checkAdmin, async (req, res, next) => {
   try {
     const { username, password, roleId } = req.body;
     const parsedRoleId = parseInt(roleId);
 
     if (!username || !password) {
       throw new ApiError(400, '用户名和密码不能为空');
+    }
+    if (![1, 2, 3].includes(parsedRoleId)) {
+      throw new ApiError(400, '无效的角色');
     }
 
     const currentUserId = req.session.user?.id || req.user.userId;
@@ -92,7 +101,7 @@ router.post('/api/users', authMiddleware.verifyToken, authMiddleware.checkAdmin,
     const newUser = await db.createUser(username, hashedPassword, parsedRoleId, createdBy);
 
     if (newUser) {
-      res.json({ success: true, message: '用户创建成功', user: newUser });
+      res.json({ success: true, message: '用户创建成功', user: sanitizeUser(newUser) });
     } else {
       throw new ApiError(400, '用户名已存在');
     }
@@ -105,7 +114,7 @@ router.post('/api/users', authMiddleware.verifyToken, authMiddleware.checkAdmin,
 });
 
 // API: 删除用户（仅管理员）
-router.delete('/api/users/:userId', authMiddleware.verifyToken, authMiddleware.checkAdmin, async (req, res, next) => {
+router.delete('/api/users/:userId', authMiddleware.verifyToken, authMiddleware.requireScope('users:write'), authMiddleware.checkAdmin, async (req, res, next) => {
   try {
     const { userId } = req.params;
     const userIdInt = parseInt(userId);
@@ -117,6 +126,10 @@ router.delete('/api/users/:userId', authMiddleware.verifyToken, authMiddleware.c
     const currentUserId = req.session.user?.id || req.user.userId;
     const currentUser = await db.getUserById(currentUserId);
     const targetUser = await db.getUserById(userIdInt);
+
+    if (!targetUser) {
+      throw new ApiError(404, '用户不存在');
+    }
 
     if (currentUser.roleId !== 1 &&
         (targetUser.id !== currentUserId && targetUser.createdBy !== currentUserId)) {
@@ -137,7 +150,7 @@ router.delete('/api/users/:userId', authMiddleware.verifyToken, authMiddleware.c
 });
 
 // API: 更新用户角色（仅管理员）
-router.put('/api/users/:userId/role', authMiddleware.verifyToken, authMiddleware.checkAdmin, async (req, res, next) => {
+router.put('/api/users/:userId/role', authMiddleware.verifyToken, authMiddleware.requireScope('users:write'), authMiddleware.checkAdmin, async (req, res, next) => {
   try {
     const { userId } = req.params;
     const { roleId } = req.body;
@@ -147,20 +160,25 @@ router.put('/api/users/:userId/role', authMiddleware.verifyToken, authMiddleware
     if (isNaN(userIdInt) || isNaN(roleIdInt)) {
       throw new ApiError(400, '无效的用户ID或角色ID');
     }
+    if (![1, 2, 3].includes(roleIdInt)) {
+      throw new ApiError(400, '无效的角色');
+    }
 
     const currentUserId = req.session.user?.id || req.user.userId;
     const currentUser = await db.getUserById(currentUserId);
     const targetUser = await db.getUserById(userIdInt);
+
+    if (!targetUser) {
+      throw new ApiError(404, '用户不存在');
+    }
 
     if (currentUser.roleId !== 1 &&
         (targetUser.id !== currentUserId && targetUser.createdBy !== currentUserId)) {
       throw new ApiError(403, '没有权限修改该用户的角色');
     }
 
-    if (currentUser.roleId === 2) {
-      if (roleIdInt === 1) {
-        throw new ApiError(403, '普通管理员不能创建超级管理员');
-      }
+    if (currentUser.roleId === 2 && roleIdInt !== 3) {
+      throw new ApiError(403, '普通管理员只能将用户设为普通用户');
     }
 
     if (currentUser.roleId === 1 && targetUser.roleId === 3 && roleIdInt === 2) {
@@ -188,7 +206,7 @@ router.put('/api/users/:userId/role', authMiddleware.verifyToken, authMiddleware
 });
 
 // API: 更新用户的上级管理员（仅超级管理员）
-router.put('/api/users/:userId/createdBy', authMiddleware.verifyToken, authMiddleware.checkAdmin, async (req, res, next) => {
+router.put('/api/users/:userId/createdBy', authMiddleware.verifyToken, authMiddleware.requireScope('users:write'), authMiddleware.checkAdmin, async (req, res, next) => {
   try {
     const { userId } = req.params;
     const { createdBy } = req.body;
@@ -207,6 +225,7 @@ router.put('/api/users/:userId/createdBy', authMiddleware.verifyToken, authMiddl
     }
 
     const targetUser = await db.getUserById(userIdInt);
+
     if (!targetUser) {
       throw new ApiError(404, '用户不存在');
     }
@@ -234,7 +253,7 @@ router.put('/api/users/:userId/createdBy', authMiddleware.verifyToken, authMiddl
 });
 
 // API: 用户修改自己的密码
-router.put('/api/users/self/password', authMiddleware.verifyToken, async (req, res, next) => {
+router.put('/api/users/self/password', authMiddleware.verifyToken, authMiddleware.requireScope('users:write'), async (req, res, next) => {
   try {
     const { oldPassword, newPassword } = req.body;
     const userId = req.session.user?.id || req.user.userId;
@@ -266,7 +285,7 @@ router.put('/api/users/self/password', authMiddleware.verifyToken, async (req, r
 });
 
 // API: 管理员修改用户密码（仅管理员）
-router.put('/api/users/:userId/password', authMiddleware.verifyToken, authMiddleware.checkAdmin, async (req, res, next) => {
+router.put('/api/users/:userId/password', authMiddleware.verifyToken, authMiddleware.requireScope('users:write'), authMiddleware.checkAdmin, async (req, res, next) => {
   try {
     const { userId } = req.params;
     const { newPassword } = req.body;
@@ -282,6 +301,10 @@ router.put('/api/users/:userId/password', authMiddleware.verifyToken, authMiddle
     const currentUserId = req.session.user?.id || req.user.userId;
     const currentUser = await db.getUserById(currentUserId);
     const targetUser = await db.getUserById(userIdInt);
+
+    if (!targetUser) {
+      throw new ApiError(404, '用户不存在');
+    }
 
     if (currentUser.roleId !== 1 &&
         (targetUser.id !== currentUserId && targetUser.createdBy !== currentUserId)) {
@@ -303,7 +326,7 @@ router.put('/api/users/:userId/password', authMiddleware.verifyToken, authMiddle
 });
 
 // API: 获取所有角色
-router.get('/api/roles', authMiddleware.verifyToken, async (req, res, next) => {
+router.get('/api/roles', authMiddleware.verifyToken, authMiddleware.requireScope('users:read'), async (req, res, next) => {
   try {
     const roles = await db.getAllRoles();
     res.json(roles);
@@ -316,7 +339,7 @@ router.get('/api/roles', authMiddleware.verifyToken, async (req, res, next) => {
 });
 
 // API: 获取用户项目权限列表
-router.get('/api/users/:userId/project-permissions', authMiddleware.verifyToken, async (req, res, next) => {
+router.get('/api/users/:userId/project-permissions', authMiddleware.verifyToken, authMiddleware.requireScope('users:read'), async (req, res, next) => {
   try {
     const { userId } = req.params;
     const userIdInt = parseInt(userId);
@@ -353,7 +376,7 @@ router.get('/api/users/:userId/project-permissions', authMiddleware.verifyToken,
 });
 
 // API: 为用户添加项目权限（仅管理员）
-router.post('/api/users/:userId/project-permissions', authMiddleware.verifyToken, authMiddleware.checkAdmin, authMiddleware.checkAdminProjectPermission, async (req, res, next) => {
+router.post('/api/users/:userId/project-permissions', authMiddleware.verifyToken, authMiddleware.requireScope('users:write'), authMiddleware.checkAdmin, authMiddleware.checkAdminProjectPermission, async (req, res, next) => {
   try {
     const { userId } = req.params;
     const { projectId } = req.body;
@@ -371,6 +394,7 @@ router.post('/api/users/:userId/project-permissions', authMiddleware.verifyToken
     if (targetUser && targetUser.username === 'admin') {
       throw new ApiError(403, 'admin用户的项目权限不可修改');
     }
+    if (!targetUser) throw new ApiError(404, '用户不存在');
 
     if (currentUser.roleId !== 1 &&
         (targetUser.id !== currentUserId && targetUser.createdBy !== currentUserId)) {
@@ -391,7 +415,7 @@ router.post('/api/users/:userId/project-permissions', authMiddleware.verifyToken
 });
 
 // API: 移除用户的项目权限（仅管理员）
-router.delete('/api/users/:userId/project-permissions/:projectId', authMiddleware.verifyToken, authMiddleware.checkAdmin, authMiddleware.checkAdminProjectPermission, async (req, res, next) => {
+router.delete('/api/users/:userId/project-permissions/:projectId', authMiddleware.verifyToken, authMiddleware.requireScope('users:write'), authMiddleware.checkAdmin, authMiddleware.checkAdminProjectPermission, async (req, res, next) => {
   try {
     const { userId, projectId } = req.params;
     const userIdInt = parseInt(userId);
@@ -408,6 +432,7 @@ router.delete('/api/users/:userId/project-permissions/:projectId', authMiddlewar
     if (targetUser && targetUser.username === 'admin') {
       throw new ApiError(403, 'admin用户的项目权限不可修改');
     }
+    if (!targetUser) throw new ApiError(404, '用户不存在');
 
     if (currentUser.roleId !== 1 &&
         (targetUser.id !== currentUserId && targetUser.createdBy !== currentUserId)) {
@@ -430,7 +455,7 @@ router.delete('/api/users/:userId/project-permissions/:projectId', authMiddlewar
 // ==================== 程序级权限路由（细粒度控制） ====================
 
 // API: 获取用户的程序权限列表
-router.get('/api/users/:userId/program-permissions', authMiddleware.verifyToken, async (req, res, next) => {
+router.get('/api/users/:userId/program-permissions', authMiddleware.verifyToken, authMiddleware.requireScope('users:read'), async (req, res, next) => {
   try {
     const { userId } = req.params;
     const userIdInt = parseInt(userId);
@@ -439,6 +464,8 @@ router.get('/api/users/:userId/program-permissions', authMiddleware.verifyToken,
     const currentUserId = req.session.user?.id || req.user.userId;
     const currentUser = await db.getUserById(currentUserId);
     const targetUser = await db.getUserById(userIdInt);
+
+    if (!targetUser) throw new ApiError(404, '用户不存在');
 
     if (currentUserId !== userIdInt && currentUser.roleId !== 1) {
       if (currentUser.roleId === 2 && targetUser.createdBy !== currentUserId) {
@@ -455,7 +482,7 @@ router.get('/api/users/:userId/program-permissions', authMiddleware.verifyToken,
 });
 
 // API: 为用户添加程序权限（仅管理员）
-router.post('/api/users/:userId/program-permissions', authMiddleware.verifyToken, authMiddleware.checkAdmin, async (req, res, next) => {
+router.post('/api/users/:userId/program-permissions', authMiddleware.verifyToken, authMiddleware.requireScope('users:write'), authMiddleware.checkAdmin, async (req, res, next) => {
   try {
     const { userId } = req.params;
     const { programId } = req.body;
@@ -467,8 +494,14 @@ router.post('/api/users/:userId/program-permissions', authMiddleware.verifyToken
     const targetUser = await db.getUserById(userIdInt);
 
     if (targetUser && targetUser.username === 'admin') throw new ApiError(403, 'admin用户的权限不可修改');
+    if (!targetUser) throw new ApiError(404, '用户不存在');
     if (currentUser.roleId !== 1 && targetUser.createdBy !== currentUserId) {
       throw new ApiError(403, '没有权限为该用户添加程序权限');
+    }
+
+    const { projectId } = parseProgramId(programId);
+    if (currentUser.roleId !== 1 && !(await db.checkUserProjectPermission(currentUserId, projectId))) {
+      throw new ApiError(403, '没有权限为该机器设置程序权限');
     }
 
     await db.addUserProgramPermission(userIdInt, programId);
@@ -480,7 +513,7 @@ router.post('/api/users/:userId/program-permissions', authMiddleware.verifyToken
 });
 
 // API: 移除用户的程序权限
-router.delete('/api/users/:userId/program-permissions/:programId', authMiddleware.verifyToken, authMiddleware.checkAdmin, async (req, res, next) => {
+router.delete('/api/users/:userId/program-permissions/:programId', authMiddleware.verifyToken, authMiddleware.requireScope('users:write'), authMiddleware.checkAdmin, async (req, res, next) => {
   try {
     const { userId, programId } = req.params;
     const userIdInt = parseInt(userId);
@@ -491,8 +524,14 @@ router.delete('/api/users/:userId/program-permissions/:programId', authMiddlewar
     const targetUser = await db.getUserById(userIdInt);
 
     if (targetUser && targetUser.username === 'admin') throw new ApiError(403, 'admin用户的权限不可修改');
+    if (!targetUser) throw new ApiError(404, '用户不存在');
     if (currentUser.roleId !== 1 && targetUser.createdBy !== currentUserId) {
       throw new ApiError(403, '没有权限移除该用户的程序权限');
+    }
+
+    const { projectId } = parseProgramId(programId);
+    if (currentUser.roleId !== 1 && !(await db.checkUserProjectPermission(currentUserId, projectId))) {
+      throw new ApiError(403, '没有权限修改该机器的程序权限');
     }
 
     await db.removeUserProgramPermission(userIdInt, programId);

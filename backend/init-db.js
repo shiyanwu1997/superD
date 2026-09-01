@@ -70,6 +70,35 @@ async function initSQLiteDatabase() {
       FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE,
       UNIQUE(userId, programId)
     );
+
+    CREATE TABLE IF NOT EXISTS api_tokens (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      userId INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      tokenHash TEXT NOT NULL UNIQUE,
+      scopes TEXT NOT NULL,
+      expiresAt TEXT NOT NULL,
+      lastUsedAt TEXT,
+      revokedAt TEXT,
+      createdAt TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_api_tokens_token_hash ON api_tokens(tokenHash);
+
+    CREATE TABLE IF NOT EXISTS api_audit_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      apiTokenId INTEGER,
+      userId INTEGER,
+      method TEXT NOT NULL,
+      path TEXT NOT NULL,
+      statusCode INTEGER NOT NULL,
+      durationMs INTEGER NOT NULL,
+      ip TEXT,
+      createdAt TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (apiTokenId) REFERENCES api_tokens(id) ON DELETE SET NULL,
+      FOREIGN KEY (userId) REFERENCES users(id) ON DELETE SET NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_api_audit_events_created_at ON api_audit_events(createdAt);
   `);
 
   // 插入初始角色
@@ -165,6 +194,39 @@ async function initMySQLDatabase() {
       createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE,
       UNIQUE KEY unique_user_program (userId, programId)
+    )
+  `);
+
+  await connection.query(`
+    CREATE TABLE IF NOT EXISTS api_tokens (
+      id INT PRIMARY KEY AUTO_INCREMENT,
+      userId INT NOT NULL,
+      name VARCHAR(100) NOT NULL,
+      tokenHash VARCHAR(64) NOT NULL UNIQUE,
+      scopes TEXT NOT NULL,
+      expiresAt DATETIME NOT NULL,
+      lastUsedAt DATETIME NULL,
+      revokedAt DATETIME NULL,
+      createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE,
+      INDEX idx_api_tokens_token_hash (tokenHash)
+    )
+  `);
+
+  await connection.query(`
+    CREATE TABLE IF NOT EXISTS api_audit_events (
+      id BIGINT PRIMARY KEY AUTO_INCREMENT,
+      apiTokenId INT NULL,
+      userId INT NULL,
+      method VARCHAR(10) NOT NULL,
+      path VARCHAR(255) NOT NULL,
+      statusCode SMALLINT NOT NULL,
+      durationMs INT NOT NULL,
+      ip VARCHAR(64) NULL,
+      createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (apiTokenId) REFERENCES api_tokens(id) ON DELETE SET NULL,
+      FOREIGN KEY (userId) REFERENCES users(id) ON DELETE SET NULL,
+      INDEX idx_api_audit_events_created_at (createdAt)
     )
   `);
 

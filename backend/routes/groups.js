@@ -4,15 +4,27 @@ const db = require('../models/db');
 const authMiddleware = require('../middleware/auth');
 const { ApiError } = require('../utils/errors');
 
+function sanitizeProject(project) {
+  const { supervisorConfig, ...safeProject } = project;
+  return {
+    ...safeProject,
+    supervisorConfig: {
+      host: supervisorConfig?.host || '',
+      port: supervisorConfig?.port || 0
+    }
+  };
+}
+
 // 获取所有分组
-router.get('/api/groups', authMiddleware.verifyToken, async (req, res, next) => {
+router.get('/api/groups', authMiddleware.verifyToken, authMiddleware.requireScope('groups:read'), async (req, res, next) => {
   try {
+    const userId = req.user.userId;
     const groups = await db.getAllGroups();
-    const allProjects = await db.getAllProjects();
+    const visibleProjects = await db.getUserProjects(userId);
     const result = groups.map(g => ({
       ...g,
-      machineCount: allProjects.filter(p => p.groupId === g.id).length
-    }));
+      machineCount: visibleProjects.filter(p => p.groupId === g.id).length
+    })).filter(group => group.machineCount > 0);
     res.json(result);
   } catch (error) {
     next(new ApiError(500, '获取分组列表失败', error.message));
@@ -20,7 +32,7 @@ router.get('/api/groups', authMiddleware.verifyToken, async (req, res, next) => 
 });
 
 // 创建分组（管理员）
-router.post('/api/groups', authMiddleware.verifyToken, authMiddleware.checkAdmin, async (req, res, next) => {
+router.post('/api/groups', authMiddleware.verifyToken, authMiddleware.requireScope('groups:write'), authMiddleware.checkSuperAdmin, async (req, res, next) => {
   try {
     const { name, description } = req.body;
     if (!name || !name.trim()) throw new ApiError(400, '分组名称不能为空');
@@ -34,7 +46,7 @@ router.post('/api/groups', authMiddleware.verifyToken, authMiddleware.checkAdmin
 });
 
 // 更新分组
-router.put('/api/groups/:id', authMiddleware.verifyToken, authMiddleware.checkAdmin, async (req, res, next) => {
+router.put('/api/groups/:id', authMiddleware.verifyToken, authMiddleware.requireScope('groups:write'), authMiddleware.checkSuperAdmin, async (req, res, next) => {
   try {
     const id = parseInt(req.params.id);
     if (isNaN(id)) throw new ApiError(400, '无效的分组ID');
@@ -48,7 +60,7 @@ router.put('/api/groups/:id', authMiddleware.verifyToken, authMiddleware.checkAd
 });
 
 // 删除分组
-router.delete('/api/groups/:id', authMiddleware.verifyToken, authMiddleware.checkAdmin, async (req, res, next) => {
+router.delete('/api/groups/:id', authMiddleware.verifyToken, authMiddleware.requireScope('groups:write'), authMiddleware.checkSuperAdmin, async (req, res, next) => {
   try {
     const id = parseInt(req.params.id);
     if (isNaN(id)) throw new ApiError(400, '无效的分组ID');
@@ -61,11 +73,14 @@ router.delete('/api/groups/:id', authMiddleware.verifyToken, authMiddleware.chec
 });
 
 // 获取分组下的机器
-router.get('/api/groups/:id/projects', authMiddleware.verifyToken, async (req, res, next) => {
+router.get('/api/groups/:id/projects', authMiddleware.verifyToken, authMiddleware.requireScope('groups:read'), async (req, res, next) => {
   try {
     const id = parseInt(req.params.id);
     if (isNaN(id)) throw new ApiError(400, '无效的分组ID');
-    const projects = await db.getProjectsByGroup(id);
+    const visibleProjects = await db.getUserProjects(req.user.userId);
+    const projects = visibleProjects
+      .filter(project => project.groupId === id)
+      .map(sanitizeProject);
     res.json(projects);
   } catch (error) {
     if (error instanceof ApiError) return next(error);
@@ -74,7 +89,7 @@ router.get('/api/groups/:id/projects', authMiddleware.verifyToken, async (req, r
 });
 
 // 设置机器的分组
-router.put('/api/projects/:id/group', authMiddleware.verifyToken, authMiddleware.checkAdmin, async (req, res, next) => {
+router.put('/api/projects/:id/group', authMiddleware.verifyToken, authMiddleware.requireScope('groups:write'), authMiddleware.checkSuperAdmin, async (req, res, next) => {
   try {
     const id = parseInt(req.params.id);
     if (isNaN(id)) throw new ApiError(400, '无效的机器ID');

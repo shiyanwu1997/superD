@@ -44,7 +44,7 @@ pool.on('enqueue', () => {
 const queryWithLogs = async (sql, params = [], retryCount = 3, retryDelay = 1000) => {
   const start = Date.now();
   
-  Logger.debug('数据库查询', { sql, params, retryCount });
+  Logger.debug('数据库查询', { sql, paramCount: params.length, retryCount });
   
   try {
     // 使用原始pool.query以避免递归调用
@@ -615,6 +615,72 @@ const setProjectGroup = async (projectId, groupId) => {
   return true;
 };
 
+// ==================== 服务 API 令牌与审计 ====================
+
+function parseApiToken(row) {
+  if (!row) return null;
+  return {
+    ...row,
+    scopes: typeof row.scopes === 'string' ? JSON.parse(row.scopes) : row.scopes
+  };
+}
+
+const createApiToken = async (userId, name, tokenHash, scopes, expiresAt) => {
+  const mysqlExpiresAt = new Date(expiresAt).toISOString().slice(0, 19).replace('T', ' ');
+  const [result] = await queryWithLogs(
+    'INSERT INTO api_tokens (userId, name, tokenHash, scopes, expiresAt) VALUES (?, ?, ?, ?, ?)',
+    [userId, name, tokenHash, JSON.stringify(scopes), mysqlExpiresAt]
+  );
+  const [rows] = await queryWithLogs('SELECT * FROM api_tokens WHERE id = ?', [result.insertId]);
+  return parseApiToken(rows[0] || null);
+};
+
+const getActiveApiTokenByHash = async (tokenHash) => {
+  const [rows] = await queryWithLogs(
+    'SELECT * FROM api_tokens WHERE tokenHash = ? AND revokedAt IS NULL AND expiresAt > NOW()',
+    [tokenHash]
+  );
+  return parseApiToken(rows[0] || null);
+};
+
+const getApiTokens = async () => {
+  const [rows] = await queryWithLogs(`
+    SELECT t.id, t.userId, t.name, t.scopes, t.expiresAt, t.lastUsedAt, t.revokedAt, t.createdAt, u.username
+    FROM api_tokens t JOIN users u ON u.id = t.userId
+    ORDER BY t.createdAt DESC, t.id DESC
+  `);
+  return rows.map(parseApiToken);
+};
+
+const touchApiToken = async (tokenId) => {
+  await queryWithLogs('UPDATE api_tokens SET lastUsedAt = NOW() WHERE id = ?', [tokenId]);
+};
+
+const revokeApiToken = async (tokenId) => {
+  const [result] = await queryWithLogs(
+    'UPDATE api_tokens SET revokedAt = NOW() WHERE id = ? AND revokedAt IS NULL', [tokenId]
+  );
+  return result.affectedRows > 0;
+};
+
+const createApiAuditEvent = async ({ apiTokenId, userId, method, path, statusCode, durationMs, ip }) => {
+  await queryWithLogs(`
+    INSERT INTO api_audit_events (apiTokenId, userId, method, path, statusCode, durationMs, ip)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `, [apiTokenId, userId, method, path, statusCode, durationMs, ip || null]);
+};
+
+const getApiAuditEvents = async (limit) => {
+  const [rows] = await queryWithLogs(`
+    SELECT e.*, t.name AS tokenName, u.username
+    FROM api_audit_events e
+    LEFT JOIN api_tokens t ON t.id = e.apiTokenId
+    LEFT JOIN users u ON u.id = e.userId
+    ORDER BY e.id DESC LIMIT ?
+  `, [limit]);
+  return rows;
+};
+
 module.exports = {
   getUserByUsername,
   getUserById,
@@ -645,5 +711,12 @@ module.exports = {
   updateGroup,
   deleteGroup,
   getProjectsByGroup,
-  setProjectGroup
+  setProjectGroup,
+  createApiToken,
+  getActiveApiTokenByHash,
+  getApiTokens,
+  touchApiToken,
+  revokeApiToken,
+  createApiAuditEvent,
+  getApiAuditEvents
 };
