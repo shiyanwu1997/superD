@@ -1,22 +1,59 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
-  Layout, Menu, Table, Button, Tag, Space, message,
-  Card, Row, Col, Statistic, Empty, Badge, Select, Skeleton,
-  Typography, Input, Dropdown, Avatar, Tooltip
+  Layout,
+  Menu,
+  Table,
+  Button,
+  Tag,
+  Space,
+  message,
+  Card,
+  Row,
+  Col,
+  Statistic,
+  Empty,
+  Badge,
+  Select,
+  Skeleton,
+  Typography,
+  Input,
+  Dropdown,
+  Avatar,
+  Tooltip,
 } from 'antd';
-import { 
-  AppstoreOutlined, SettingOutlined, LogoutOutlined, UserOutlined, 
-  PlayCircleOutlined, PauseCircleOutlined, ReloadOutlined, 
-  FileTextOutlined, ClusterOutlined, CheckCircleOutlined, 
-  CloseCircleOutlined, ExclamationCircleOutlined, SearchOutlined,
-  MenuFoldOutlined, MenuUnfoldOutlined, ControlOutlined
+import {
+  AppstoreOutlined,
+  SettingOutlined,
+  LogoutOutlined,
+  UserOutlined,
+  PlayCircleOutlined,
+  PauseCircleOutlined,
+  ReloadOutlined,
+  FileTextOutlined,
+  ClusterOutlined,
+  CheckCircleOutlined,
+  CloseCircleOutlined,
+  ExclamationCircleOutlined,
+  SearchOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
+  ControlOutlined,
 } from '@ant-design/icons';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import {
-  getAllPrograms, getProgramsByProject, startProgram, stopProgram, restartProgram,
-  getProjects, startAllPrograms, stopAllPrograms, restartAllPrograms, reloadConfig,
-  checkProjectStatus, getGroups
+  getAllPrograms,
+  getProgramsByProject,
+  startProgram,
+  stopProgram,
+  restartProgram,
+  getProjects,
+  startAllPrograms,
+  stopAllPrograms,
+  restartAllPrograms,
+  reloadConfig,
+  checkProjectStatus,
+  getGroups,
 } from '../utils/api';
 
 // 引入子组件
@@ -34,7 +71,7 @@ const ProgramsPage = () => {
   const { projectId } = useParams();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
-  
+
   // --- 状态管理 ---
   const [collapsed, setCollapsed] = useState(false);
   const [programs, setPrograms] = useState([]);
@@ -49,9 +86,11 @@ const ProgramsPage = () => {
   // 页面加载时间状态，用于控制离线状态显示的延迟
   const pageLoadTimeRef = useRef(null);
   const prevProjectRef = useRef(null);
-  
+  // 已确认删除的项目，避免重复提示/循环刷新
+  const deletedProjectRef = useRef(null);
+
   // 操作Loading状态
-  const [actionLoading, setActionLoading] = useState({}); 
+  const [actionLoading, setActionLoading] = useState({});
 
   // 模态框控制
   const [showUsersModal, setShowUsersModal] = useState(false);
@@ -64,16 +103,16 @@ const ProgramsPage = () => {
   const stats = useMemo(() => {
     return {
       total: programs.length,
-      running: programs.filter(p => p.status === 'RUNNING').length,
-      stopped: programs.filter(p => p.status === 'STOPPED').length,
-      error: programs.filter(p => ['FATAL', 'BACKOFF', 'UNKNOWN', 'EXITED'].includes(p.status)).length
+      running: programs.filter((p) => p.status === 'RUNNING').length,
+      stopped: programs.filter((p) => p.status === 'STOPPED').length,
+      error: programs.filter((p) => ['FATAL', 'BACKOFF', 'UNKNOWN', 'EXITED'].includes(p.status)).length,
     };
   }, [programs]);
 
   // 搜索过滤
   const filteredPrograms = useMemo(() => {
     if (!searchText) return programs;
-    return programs.filter(p => p.name.toLowerCase().includes(searchText.toLowerCase()));
+    return programs.filter((p) => p.name.toLowerCase().includes(searchText.toLowerCase()));
   }, [programs, searchText]);
 
   const sortKey = useCallback((name) => {
@@ -90,9 +129,10 @@ const ProgramsPage = () => {
       return pa.localeCompare(pb) || sa - sb;
     });
     if (projectSearchText) {
-      list = list.filter(p =>
-        p.name.toLowerCase().includes(projectSearchText.toLowerCase()) ||
-        p.description?.toLowerCase().includes(projectSearchText.toLowerCase())
+      list = list.filter(
+        (p) =>
+          p.name.toLowerCase().includes(projectSearchText.toLowerCase()) ||
+          p.description?.toLowerCase().includes(projectSearchText.toLowerCase())
       );
     }
     return list;
@@ -126,11 +166,11 @@ const ProgramsPage = () => {
       }
       const data = await getProjects();
       // 准备包含初始连接状态的项目列表
-      const projectsWithInitialStatus = data.map(project => ({
+      const projectsWithInitialStatus = data.map((project) => ({
         ...project,
-        connectionStatus: { connected: null, error: null } // 初始状态为检查中
+        connectionStatus: { connected: null, error: null }, // 初始状态为检查中
       }));
-      
+
       // 一次性更新项目列表，让用户能看到所有有权限的项目
       setProjects(projectsWithInitialStatus);
 
@@ -141,7 +181,7 @@ const ProgramsPage = () => {
           let connectionStatus;
           let retryCount = 0;
           const maxRetries = 1;
-          
+
           while (retryCount <= maxRetries) {
             try {
               connectionStatus = await checkProjectStatus(project.id);
@@ -152,44 +192,43 @@ const ProgramsPage = () => {
                 throw retryError;
               }
               // 等待一段时间后重试，增加重试间隔时间
-              await new Promise(resolve => setTimeout(resolve, 2000 * retryCount));
+              await new Promise((resolve) => setTimeout(resolve, 2000 * retryCount));
             }
           }
-          
+
           // 应用连接状态延迟显示逻辑
           const delayedStatus = getDelayedConnectionStatus(connectionStatus);
           return { projectId: project.id, connectionStatus: delayedStatus };
         } catch (error) {
           console.error(`检查项目${project.id}连接状态失败:`, error);
-          
+
           // 应用连接状态延迟显示逻辑
           const errorStatus = { connected: false, error: '连接检查失败: ' + error.message };
           const delayedStatus = getDelayedConnectionStatus(errorStatus);
-          
-          return { 
-            projectId: project.id, 
-            connectionStatus: delayedStatus
+
+          return {
+            projectId: project.id,
+            connectionStatus: delayedStatus,
           };
         }
       });
-      
+
       // 等待所有连接状态检查完成
       const connectionStatusResults = await Promise.all(connectionStatusPromises);
-      
+
       // 批量更新连接状态
-      setProjects(prevProjects => {
-        return prevProjects.map(project => {
-          const statusResult = connectionStatusResults.find(result => result.projectId === project.id);
+      setProjects((prevProjects) => {
+        return prevProjects.map((project) => {
+          const statusResult = connectionStatusResults.find((result) => result.projectId === project.id);
           if (statusResult) {
             return {
               ...project,
-              connectionStatus: statusResult.connectionStatus
+              connectionStatus: statusResult.connectionStatus,
             };
           }
           return project;
         });
       });
-      
     } catch (error) {
       if (!error._handled) {
         console.error('获取项目列表失败:', error);
@@ -200,15 +239,22 @@ const ProgramsPage = () => {
     }
   }, [getDelayedConnectionStatus, fetchGroups]);
 
-  const fetchAllProgramsData = async (showLoading = true) => { // eslint-disable-line no-unused-vars
+  const fetchAllProgramsData = async (showLoading = true) => {
+    // eslint-disable-line no-unused-vars
     try {
       const data = await getAllPrograms();
-      const uniquePrograms = [...new Map(data.map(program => [program.id, program])).values()];
-      setPrograms(prev => prev.length === 0 ? uniquePrograms : prev.map(p => {
-        const u = uniquePrograms.find(x => x.id === p.id);
-        return u ? { ...p, status: u.status, state: u.state, uptime: u.uptime } : p;
-      }));
-    } catch { /* silent refresh */ }
+      const uniquePrograms = [...new Map(data.map((program) => [program.id, program])).values()];
+      setPrograms((prev) =>
+        prev.length === 0
+          ? uniquePrograms
+          : prev.map((p) => {
+              const u = uniquePrograms.find((x) => x.id === p.id);
+              return u ? { ...p, status: u.status, state: u.state, uptime: u.uptime } : p;
+            })
+      );
+    } catch {
+      /* silent refresh */
+    }
   };
 
   const fetchPrograms = async (pid, showLoading = true) => {
@@ -221,26 +267,38 @@ const ProgramsPage = () => {
 
       if (showLoading) setLoading(true);
       const data = await getProgramsByProject(projectIdStr);
-      const uniquePrograms = [...new Map(data.map(program => [program.id, program])).values()];
+      const uniquePrograms = [...new Map(data.map((program) => [program.id, program])).values()];
 
       // 静默刷新：仅更新状态字段，不触发loading闪光
-      setPrograms(prev => {
+      setPrograms((prev) => {
         if (isNewProject || prev.length === 0) return uniquePrograms;
         // 如果程序数量变了，全量更新
         if (prev.length !== uniquePrograms.length) return uniquePrograms;
         // 否则只更新 status 和 uptime
-        return prev.map(p => {
-          const updated = uniquePrograms.find(u => u.id === p.id);
+        return prev.map((p) => {
+          const updated = uniquePrograms.find((u) => u.id === p.id);
           return updated ? { ...p, status: updated.status, state: updated.state, uptime: updated.uptime } : p;
         });
       });
-      
+
       // 更新项目连接状态为在线
-      setProjects(prevProjects => prevProjects.map(p => 
-        p.id === projectIdNum ? { ...p, connectionStatus: { connected: true, error: null } } : p
-      ));
-      
+      setProjects((prevProjects) =>
+        prevProjects.map((p) =>
+          p.id === projectIdNum ? { ...p, connectionStatus: { connected: true, error: null } } : p
+        )
+      );
     } catch (err) {
+      // 项目已被删除：跳回列表页并刷新项目树，避免轮询无限报错
+      const errText = `${err.response?.data?.data || ''} ${err.message || ''}`;
+      if (errText.includes('项目不存在')) {
+        if (deletedProjectRef.current !== projectIdNum) {
+          deletedProjectRef.current = projectIdNum;
+          message.warning('该项目已被删除');
+          navigate('/programs', { replace: true });
+          fetchProjects();
+        }
+        return;
+      }
       if (showLoading) {
         setPrograms([]);
         if (!err._handled && !err.message?.includes('cancel')) {
@@ -248,9 +306,11 @@ const ProgramsPage = () => {
         }
       }
       // 更新项目连接状态为离线
-      setProjects(prevProjects => prevProjects.map(p =>
-        p.id === projectIdNum ? { ...p, connectionStatus: { connected: false, error: err.message } } : p
-      ));
+      setProjects((prevProjects) =>
+        prevProjects.map((p) =>
+          p.id === projectIdNum ? { ...p, connectionStatus: { connected: false, error: err.message } } : p
+        )
+      );
     } finally {
       if (showLoading) setLoading(false);
     }
@@ -287,7 +347,7 @@ const ProgramsPage = () => {
   // --- 动作处理 ---
 
   const handleAction = async (id, action, name) => {
-    setActionLoading(prev => ({ ...prev, [id]: action }));
+    setActionLoading((prev) => ({ ...prev, [id]: action }));
     try {
       let res;
       if (action === 'start') res = await startProgram(id);
@@ -296,7 +356,7 @@ const ProgramsPage = () => {
 
       if (res.success) {
         message.success(`${name} 指令已发送`);
-        
+
         // 对于重启和启动操作，增加延迟以确保程序有足够时间启动
         if (action === 'restart' || action === 'start') {
           // 给程序一些启动时间
@@ -313,13 +373,16 @@ const ProgramsPage = () => {
     } catch {
       message.error('请求异常');
     } finally {
-      setActionLoading(prev => ({ ...prev, [id]: null }));
+      setActionLoading((prev) => ({ ...prev, [id]: null }));
     }
   };
 
   const handleBatch = async (action, name) => {
     const targets = searchText ? filteredPrograms : programs;
-    if (targets.length === 0) { message.warning('没有可操作的程序'); return; }
+    if (targets.length === 0) {
+      message.warning('没有可操作的程序');
+      return;
+    }
 
     const label = searchText ? `筛选的 ${targets.length} 个程序` : '所有程序';
     const hide = message.loading(`正在${name}${label}...`, 0);
@@ -351,19 +414,32 @@ const ProgramsPage = () => {
 
   const columns = [
     {
-        title: '状态',
-        dataIndex: 'status',
-        width: 120,
-        render: (status) => {
-          let color = 'default';
-          let icon = null;
-          if (status === 'RUNNING') { color = 'success'; icon = <CheckCircleOutlined />; }
-          else if (status === 'STOPPED') { color = 'error'; icon = <PauseCircleOutlined />; }
-          else if (status === 'STARTING') { color = 'processing'; icon = <ReloadOutlined spin />; }
-          else { color = 'warning'; icon = <ExclamationCircleOutlined />; }
-          return <Tag icon={icon} color={color}>{status}</Tag>;
+      title: '状态',
+      dataIndex: 'status',
+      width: 120,
+      render: (status) => {
+        let color = 'default';
+        let icon = null;
+        if (status === 'RUNNING') {
+          color = 'success';
+          icon = <CheckCircleOutlined />;
+        } else if (status === 'STOPPED') {
+          color = 'error';
+          icon = <PauseCircleOutlined />;
+        } else if (status === 'STARTING') {
+          color = 'processing';
+          icon = <ReloadOutlined spin />;
+        } else {
+          color = 'warning';
+          icon = <ExclamationCircleOutlined />;
         }
+        return (
+          <Tag icon={icon} color={color}>
+            {status}
+          </Tag>
+        );
       },
+    },
     {
       title: '程序名称',
       dataIndex: 'name',
@@ -377,7 +453,7 @@ const ProgramsPage = () => {
             <span style={{ fontSize: 14, fontWeight: 500 }}>{short}</span>
           </Tooltip>
         );
-      }
+      },
     },
     {
       title: '运行时长',
@@ -387,7 +463,7 @@ const ProgramsPage = () => {
         // 确保只有运行中的程序显示时长，其他状态显示'-'
         if (record.status !== 'RUNNING' || !uptime) return '-';
         return <Text style={{ color: '#666', fontSize: 14 }}>{uptime}</Text>;
-      }
+      },
     },
     {
       title: '操作',
@@ -398,10 +474,10 @@ const ProgramsPage = () => {
         return (
           <Space>
             <Tooltip title="启动">
-              <Button 
-                type="text" 
-                shape="circle" 
-                icon={<PlayCircleOutlined />} 
+              <Button
+                type="text"
+                shape="circle"
+                icon={<PlayCircleOutlined />}
                 style={{ color: record.status === 'RUNNING' ? '#d9d9d9' : '#52c41a' }}
                 disabled={record.status === 'RUNNING' || loadingAction}
                 loading={loadingAction === 'start'}
@@ -409,9 +485,9 @@ const ProgramsPage = () => {
               />
             </Tooltip>
             <Tooltip title="停止">
-              <Button 
-                type="text" 
-                shape="circle" 
+              <Button
+                type="text"
+                shape="circle"
                 danger
                 icon={<PauseCircleOutlined />}
                 disabled={record.status === 'STOPPED' || loadingAction}
@@ -420,9 +496,9 @@ const ProgramsPage = () => {
               />
             </Tooltip>
             <Tooltip title={record.status === 'STOPPED' ? '未运行的服务不支持重启' : '重启'}>
-              <Button 
-                type="text" 
-                shape="circle" 
+              <Button
+                type="text"
+                shape="circle"
                 style={{ color: record.status === 'STOPPED' ? '#d9d9d9' : '#111' }}
                 icon={<ReloadOutlined />}
                 loading={loadingAction === 'restart'}
@@ -430,9 +506,9 @@ const ProgramsPage = () => {
                 onClick={() => handleAction(record.id, 'restart', '重启')}
               />
             </Tooltip>
-            <Button 
-              size="small" 
-              icon={<FileTextOutlined />} 
+            <Button
+              size="small"
+              icon={<FileTextOutlined />}
               onClick={() => {
                 setSelectedProgramId(record.id);
                 setShowLogDrawer(true);
@@ -442,50 +518,75 @@ const ProgramsPage = () => {
             </Button>
           </Space>
         );
-      }
-    }
+      },
+    },
   ];
 
   const userMenu = {
     items: [
-      ...((user?.roleId === 1 || user?.roleId === 2) ? [{
-        key: 'users',
-        label: '用户管理',
-        icon: <UserOutlined />,
-        onClick: () => setShowUsersModal(true)
-      }] : []),
+      ...(user?.roleId === 1 || user?.roleId === 2
+        ? [
+            {
+              key: 'users',
+              label: '用户管理',
+              icon: <UserOutlined />,
+              onClick: () => setShowUsersModal(true),
+            },
+          ]
+        : []),
       { key: 'pwd', label: '修改密码', icon: <SettingOutlined />, onClick: () => setShowPwdModal(true) },
       { type: 'divider' },
-      { key: 'logout', label: '退出登录', icon: <LogoutOutlined />, danger: true, onClick: logout }
-    ]
+      { key: 'logout', label: '退出登录', icon: <LogoutOutlined />, danger: true, onClick: logout },
+    ],
   };
 
   return (
     <div>
       <Layout style={{ minHeight: '100vh' }}>
-        <Sider 
-          trigger={null} 
-          collapsible 
+        <Sider
+          trigger={null}
+          collapsible
           collapsed={collapsed}
           width={280}
           style={{
-            boxShadow: '1px 0 0 0 var(--border)', zIndex: 10,
-            backgroundColor: '#fff', borderRight: 'none'
+            boxShadow: '1px 0 0 0 var(--border)',
+            zIndex: 10,
+            backgroundColor: '#fff',
+            borderRight: 'none',
           }}
         >
-          <div style={{
-            height: 56, display: 'flex', alignItems: 'center', padding: collapsed ? '0 12px' : '0 20px', justifyContent: collapsed ? 'center' : 'flex-start',
-            borderBottom: '1px solid var(--border)'
-          }}>
+          <div
+            style={{
+              height: 56,
+              display: 'flex',
+              alignItems: 'center',
+              padding: collapsed ? '0 12px' : '0 20px',
+              justifyContent: collapsed ? 'center' : 'flex-start',
+              borderBottom: '1px solid var(--border)',
+            }}
+          >
             <Logo size={32} collapsed={collapsed} />
           </div>
 
-          <div style={{
-            padding: '16px 16px 12px', display: collapsed ? 'none' : 'block',
-            borderBottom: '1px solid #e5e7eb'
-          }}>
+          <div
+            style={{
+              padding: '16px 16px 12px',
+              display: collapsed ? 'none' : 'block',
+              borderBottom: '1px solid #e5e7eb',
+            }}
+          >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: 1 }}>机器列表 ({filteredProjects.length})</span>
+              <span
+                style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: '#6b7280',
+                  textTransform: 'uppercase',
+                  letterSpacing: 1,
+                }}
+              >
+                机器列表 ({filteredProjects.length})
+              </span>
               {user?.roleId === 1 && (
                 <Tooltip title="管理机器">
                   <Button
@@ -496,7 +597,7 @@ const ProgramsPage = () => {
                     style={{
                       color: '#6b7280',
                       fontSize: '14px',
-                      fontWeight: '500'
+                      fontWeight: '500',
                     }}
                   />
                 </Tooltip>
@@ -517,96 +618,169 @@ const ProgramsPage = () => {
           {/* 机器树：分组 + 机器 */}
           <div style={{ height: 'calc(100% - 128px)', overflow: 'auto', padding: '0 8px' }}>
             <div
-              onClick={() => { navigate('/programs'); }}
+              onClick={() => {
+                navigate('/programs');
+              }}
               style={{
-                padding: '10px 12px', cursor: 'pointer', borderRadius: 6, marginBottom: 4,
-                fontSize: 14, display: 'flex', alignItems: 'center', gap: 8,
+                padding: '10px 12px',
+                cursor: 'pointer',
+                borderRadius: 6,
+                marginBottom: 4,
+                fontSize: 14,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
                 background: !projectId ? '#f4f4f5' : 'transparent',
                 fontWeight: !projectId ? 600 : 400,
-                color: !projectId ? '#111' : '#374151'
-              }}>
+                color: !projectId ? '#111' : '#374151',
+              }}
+            >
               <AppstoreOutlined /> 全部机器 ({projects.length})
             </div>
 
-            {groups.map(g => {
-              const groupProjects = projects.filter(p => p.groupId === g.id).sort((a, b) => {
-      const [pa, sa] = sortKey(a.name);
-      const [pb, sb] = sortKey(b.name);
-      return pa.localeCompare(pb) || sa - sb;
-    });
+            {groups.map((g) => {
+              const groupProjects = projects
+                .filter((p) => p.groupId === g.id)
+                .sort((a, b) => {
+                  const [pa, sa] = sortKey(a.name);
+                  const [pb, sb] = sortKey(b.name);
+                  return pa.localeCompare(pb) || sa - sb;
+                });
               const isExpanded = expandedGroups[g.id] !== false;
               return (
                 <div key={g.id} style={{ marginBottom: 4 }}>
                   <div
-                    onClick={() => setExpandedGroups(prev => ({ ...prev, [g.id]: !isExpanded }))}
+                    onClick={() => setExpandedGroups((prev) => ({ ...prev, [g.id]: !isExpanded }))}
                     style={{
-                      padding: '8px 12px', cursor: 'pointer', borderRadius: 6,
-                      fontWeight: 500, fontSize: 13, color: '#6b7280',
-                      display: 'flex', alignItems: 'center', gap: 6, userSelect: 'none',
-                      background: '#f9fafb'
-                    }}>
+                      padding: '8px 12px',
+                      cursor: 'pointer',
+                      borderRadius: 6,
+                      fontWeight: 500,
+                      fontSize: 13,
+                      color: '#6b7280',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      userSelect: 'none',
+                      background: '#f9fafb',
+                    }}
+                  >
                     <span style={{ fontSize: 10 }}>{isExpanded ? '▼' : '▶'}</span>
                     📁 {g.name}
                     <span style={{ fontSize: 11, color: '#9ca3af', marginLeft: 'auto' }}>{g.machineCount}台</span>
                   </div>
-                  {isExpanded && groupProjects
-                    .filter(p => !projectSearchText || p.name.includes(projectSearchText))
-                    .map(p => (
-                      <div key={p.id}
-                        onClick={() => navigate(`/programs/${p.id}`)}
-                        style={{
-                          padding: '8px 12px 8px 32px', cursor: 'pointer', borderRadius: 4, margin: '1px 0',
-                          fontSize: 13, display: 'flex', alignItems: 'center', gap: 8,
-                          color: projectId === String(p.id) ? '#111' : '#4b5563',
-                          background: projectId === String(p.id) ? '#f4f4f5' : 'transparent',
-                          borderLeft: projectId === String(p.id) ? '3px solid #111' : '3px solid transparent'
-                        }}>
-                        <span style={{
-                          width: 8, height: 8, borderRadius: '50%', display: 'inline-block', flexShrink: 0,
-                          backgroundColor: p.connectionStatus?.connected === true ? '#52c41a' :
-                            p.connectionStatus?.connected === null ? '#d9d9d9' : '#ff4d4f'
-                        }} />
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
-                      </div>
-                    ))}
+                  {isExpanded &&
+                    groupProjects
+                      .filter((p) => !projectSearchText || p.name.includes(projectSearchText))
+                      .map((p) => (
+                        <div
+                          key={p.id}
+                          onClick={() => navigate(`/programs/${p.id}`)}
+                          style={{
+                            padding: '8px 12px 8px 32px',
+                            cursor: 'pointer',
+                            borderRadius: 4,
+                            margin: '1px 0',
+                            fontSize: 13,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 8,
+                            color: projectId === String(p.id) ? '#111' : '#4b5563',
+                            background: projectId === String(p.id) ? '#f4f4f5' : 'transparent',
+                            borderLeft: projectId === String(p.id) ? '3px solid #111' : '3px solid transparent',
+                          }}
+                        >
+                          <span
+                            style={{
+                              width: 8,
+                              height: 8,
+                              borderRadius: '50%',
+                              display: 'inline-block',
+                              flexShrink: 0,
+                              backgroundColor:
+                                p.connectionStatus?.connected === true
+                                  ? '#52c41a'
+                                  : p.connectionStatus?.connected === null
+                                    ? '#d9d9d9'
+                                    : '#ff4d4f',
+                            }}
+                          />
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {p.name}
+                          </span>
+                        </div>
+                      ))}
                 </div>
               );
             })}
 
-            {filteredProjects.filter(p => !p.groupId).length > 0 && (
+            {filteredProjects.filter((p) => !p.groupId).length > 0 && (
               <div style={{ marginTop: 8 }}>
                 <div style={{ padding: '8px 12px', fontSize: 12, color: '#9ca3af', fontWeight: 500 }}>未分组</div>
-                {filteredProjects.filter(p => !p.groupId).map(p => (
-                  <div key={p.id}
-                    onClick={() => navigate(`/programs/${p.id}`)}
-                    style={{
-                      padding: '8px 12px', cursor: 'pointer', borderRadius: 4, margin: '1px 0',
-                      fontSize: 13, display: 'flex', alignItems: 'center', gap: 8,
-                      color: projectId === String(p.id) ? '#111' : '#4b5563',
-                      background: projectId === String(p.id) ? '#f4f4f5' : 'transparent',
-                      borderLeft: projectId === String(p.id) ? '3px solid #111' : '3px solid transparent'
-                    }}>
-                    <span style={{
-                      width: 8, height: 8, borderRadius: '50%', display: 'inline-block', flexShrink: 0,
-                      backgroundColor: p.connectionStatus?.connected === true ? '#52c41a' :
-                        p.connectionStatus?.connected === null ? '#d9d9d9' : '#ff4d4f'
-                    }} />
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
-                  </div>
-                ))}
+                {filteredProjects
+                  .filter((p) => !p.groupId)
+                  .map((p) => (
+                    <div
+                      key={p.id}
+                      onClick={() => navigate(`/programs/${p.id}`)}
+                      style={{
+                        padding: '8px 12px',
+                        cursor: 'pointer',
+                        borderRadius: 4,
+                        margin: '1px 0',
+                        fontSize: 13,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        color: projectId === String(p.id) ? '#111' : '#4b5563',
+                        background: projectId === String(p.id) ? '#f4f4f5' : 'transparent',
+                        borderLeft: projectId === String(p.id) ? '3px solid #111' : '3px solid transparent',
+                      }}
+                    >
+                      <span
+                        style={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: '50%',
+                          display: 'inline-block',
+                          flexShrink: 0,
+                          backgroundColor:
+                            p.connectionStatus?.connected === true
+                              ? '#52c41a'
+                              : p.connectionStatus?.connected === null
+                                ? '#d9d9d9'
+                                : '#ff4d4f',
+                        }}
+                      />
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {p.name}
+                      </span>
+                    </div>
+                  ))}
               </div>
             )}
           </div>
         </Sider>
 
         <Layout>
-          <Header style={{ padding: '0 24px', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #e2e8f0', zIndex: 9, height: 56 }}>
+          <Header
+            style={{
+              padding: '0 24px',
+              background: '#fff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              borderBottom: '1px solid #e2e8f0',
+              zIndex: 9,
+              height: 56,
+            }}
+          >
             {React.createElement(collapsed ? MenuUnfoldOutlined : MenuFoldOutlined, {
               className: 'trigger',
               onClick: () => setCollapsed(!collapsed),
-              style: { fontSize: 18, cursor: 'pointer' }
+              style: { fontSize: 18, cursor: 'pointer' },
             })}
-            
+
             <Dropdown menu={userMenu}>
               <Space style={{ cursor: 'pointer' }}>
                 <Avatar style={{ backgroundColor: '#111' }} icon={<UserOutlined />} />
@@ -621,123 +795,134 @@ const ProgramsPage = () => {
                 <StatsCards stats={stats} />
 
                 {/* 主操作栏 */}
-                <Card 
-                  bordered={false} 
-                  style={{ 
-                    marginBottom: 24, 
+                <Card
+                  bordered={false}
+                  style={{
+                    marginBottom: 24,
                     borderRadius: '16px',
                     boxShadow: '0 4px 20px rgba(0,0,0,0.05)',
-                    border: '1px solid #f0f0f0'
+                    border: '1px solid #f0f0f0',
                   }}
                 >
-                  <div style={{ 
-                    display: 'flex', 
-                    justifyContent: 'space-between', 
-                    alignItems: 'center', 
-                    flexWrap: 'wrap', 
-                    gap: 24 
-                  }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      flexWrap: 'wrap',
+                      gap: 24,
+                    }}
+                  >
                     <Space size="large" align="center">
-                      <Title level={4} style={{ 
-                        margin: 0, 
-                        color: '#2d3748', 
-                        fontSize: '20px',
-                        fontWeight: '700',
-                        fontFamily: 'Segoe UI, Roboto, sans-serif'
-                      }}>
-                        {projects.find(p => String(p.id) === projectId)?.name || '未命名项目'}
+                      <Title
+                        level={4}
+                        style={{
+                          margin: 0,
+                          color: '#2d3748',
+                          fontSize: '20px',
+                          fontWeight: '700',
+                          fontFamily: 'Segoe UI, Roboto, sans-serif',
+                        }}
+                      >
+                        {projects.find((p) => String(p.id) === projectId)?.name || '未命名项目'}
                       </Title>
-                      <Input 
-                        placeholder="搜索程序..." 
-                        prefix={<SearchOutlined style={{ color: '#a0aec0' }} />} 
+                      <Input
+                        placeholder="搜索程序..."
+                        prefix={<SearchOutlined style={{ color: '#a0aec0' }} />}
                         allowClear
-                        onChange={e => setSearchText(e.target.value)} 
-                        style={{ 
-                          width: 240, 
+                        onChange={(e) => setSearchText(e.target.value)}
+                        style={{
+                          width: 240,
                           borderRadius: '12px',
                           borderColor: '#e2e8f0',
-                          boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
-                        }} 
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+                        }}
                       />
                     </Space>
-                    
+
                     <Space size="middle">
-                      <Button 
+                      <Button
                         onClick={async () => {
                           // 先检查项目连接状态
                           try {
                             const connectionStatus = await checkProjectStatus(projectId);
-                            
+
                             // 更新项目连接状态
-                            setProjects(prevProjects => {
-                              return prevProjects.map(p => {
+                            setProjects((prevProjects) => {
+                              return prevProjects.map((p) => {
                                 if (p.id === Number(projectId)) {
                                   return {
                                     ...p,
-                                    connectionStatus
+                                    connectionStatus,
                                   };
                                 }
                                 return p;
                               });
                             });
-                            
+
                             // 然后刷新程序列表
                             await fetchPrograms(projectId);
                           } catch (error) {
                             console.error(`刷新失败:`, error);
                             // 如果是请求被取消的错误，不显示错误信息
-                            if (!error._handled && !error.message?.includes('cancel') && !error.message?.includes('NS_BINDING_ABORTED')) {
+                            if (
+                              !error._handled &&
+                              !error.message?.includes('cancel') &&
+                              !error.message?.includes('NS_BINDING_ABORTED')
+                            ) {
                               message.error('刷新失败');
                             }
                           }
-                        }} 
+                        }}
                         icon={<ReloadOutlined />}
                         style={{
                           borderRadius: '10px',
                           borderColor: '#e2e8f0',
                           color: '#4a5568',
-                          fontWeight: '500'
+                          fontWeight: '500',
                         }}
                       >
                         刷新
                       </Button>
-                      <Button 
-                        onClick={() => handleBatch('start', '启动')} 
+                      <Button
+                        onClick={() => handleBatch('start', '启动')}
                         icon={<PlayCircleOutlined />}
                         style={{
                           borderRadius: '10px',
                           backgroundColor: '#38a169',
                           borderColor: '#38a169',
                           color: '#ffffff',
-                          fontWeight: '500'
+                          fontWeight: '500',
                         }}
                       >
                         全部启动
                       </Button>
-                      <Button 
-                        onClick={() => handleBatch('restart', '重启')} 
+                      <Button
+                        onClick={() => handleBatch('restart', '重启')}
                         icon={<ReloadOutlined />}
                         style={{
                           borderRadius: '10px',
                           backgroundColor: '#fa8c16',
                           borderColor: '#fa8c16',
                           color: '#ffffff',
-                          fontWeight: '500'
+                          fontWeight: '500',
                         }}
-                        disabled={filteredPrograms.length === 0 || filteredPrograms.every(p => p.status === 'STOPPED')}
+                        disabled={
+                          filteredPrograms.length === 0 || filteredPrograms.every((p) => p.status === 'STOPPED')
+                        }
                       >
                         全部重启
                       </Button>
-                      <Button 
-                        danger 
-                        onClick={() => handleBatch('stop', '停止')} 
+                      <Button
+                        danger
+                        onClick={() => handleBatch('stop', '停止')}
                         icon={<PauseCircleOutlined />}
                         style={{
                           borderRadius: '10px',
                           backgroundColor: '#e53e3e',
                           borderColor: '#e53e3e',
                           color: '#ffffff',
-                          fontWeight: '500'
+                          fontWeight: '500',
                         }}
                       >
                         全部停止
@@ -748,10 +933,18 @@ const ProgramsPage = () => {
                             const res = await reloadConfig(projectId);
                             message.success(res.message || '配置已重载');
                             setTimeout(() => fetchPrograms(projectId), 500);
-                          } catch (e) { if (!e._handled) message.error('重载失败'); }
+                          } catch (e) {
+                            if (!e._handled) message.error('重载失败');
+                          }
                         }}
                         icon={<ReloadOutlined />}
-                        style={{ borderRadius: '10px', backgroundColor: '#718096', borderColor: '#718096', color: '#fff', fontWeight: '500' }}
+                        style={{
+                          borderRadius: '10px',
+                          backgroundColor: '#718096',
+                          borderColor: '#718096',
+                          color: '#fff',
+                          fontWeight: '500',
+                        }}
                       >
                         重载配置
                       </Button>
@@ -760,13 +953,13 @@ const ProgramsPage = () => {
                 </Card>
 
                 {/* 程序表格 */}
-                <Card 
-                  bordered={false} 
+                <Card
+                  bordered={false}
                   bodyStyle={{ padding: 0 }}
                   style={{
                     borderRadius: '16px',
                     boxShadow: '0 4px 20px rgba(0,0,0,0.05)',
-                    border: '1px solid #f0f0f0'
+                    border: '1px solid #f0f0f0',
                   }}
                 >
                   <Table
@@ -775,55 +968,67 @@ const ProgramsPage = () => {
                     rowKey="id"
                     loading={loading}
                     pagination={false}
-                    locale={{ 
-                      emptyText: <Empty 
-                        description={<Text style={{ color: '#a0aec0' }}>暂无程序</Text>} 
-                        image={Empty.PRESENTED_IMAGE_SIMPLE} 
-                        imageStyle={{ height: 60 }}
-                      /> 
+                    locale={{
+                      emptyText: (
+                        <Empty
+                          description={<Text style={{ color: '#a0aec0' }}>暂无程序</Text>}
+                          image={Empty.PRESENTED_IMAGE_SIMPLE}
+                          imageStyle={{ height: 60 }}
+                        />
+                      ),
                     }}
                     rowClassName={() => {
                       return 'table-row-hover';
                     }}
                     style={{
                       borderRadius: '16px',
-                      overflow: 'hidden'
+                      overflow: 'hidden',
                     }}
                     tableLayout="fixed"
                     components={{
                       Header: (props) => (
-                        <thead {...props} style={{
-                          backgroundColor: '#f7fafc',
-                          borderBottom: '2px solid #e2e8f0'
-                        }} />
+                        <thead
+                          {...props}
+                          style={{
+                            backgroundColor: '#f7fafc',
+                            borderBottom: '2px solid #e2e8f0',
+                          }}
+                        />
                       ),
                       Body: (props) => (
-                        <tbody {...props} style={{
-                          backgroundColor: '#ffffff'
-                        }} />
-                      )
+                        <tbody
+                          {...props}
+                          style={{
+                            backgroundColor: '#ffffff',
+                          }}
+                        />
+                      ),
                     }}
                   />
                 </Card>
               </>
             ) : (
-              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', flexDirection: 'column' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  height: '100%',
+                  flexDirection: 'column',
+                }}
+              >
                 <Empty description="请从左侧选择一台机器进行管理" />
               </div>
             )}
           </Content>
         </Layout>
       </Layout>
-      
+
       {/* 弹窗组件挂载区 */}
       <UsersPage isOpen={showUsersModal} onClose={() => setShowUsersModal(false)} />
-      
-      <ProgramDetailPage 
-        isOpen={showLogDrawer} 
-        onClose={() => setShowLogDrawer(false)} 
-        programId={selectedProgramId} 
-      />
-      
+
+      <ProgramDetailPage isOpen={showLogDrawer} onClose={() => setShowLogDrawer(false)} programId={selectedProgramId} />
+
       {/* 这里你需要自己创建一个 ProjectManageModal 和 ChangePasswordModal 的 Antd 版本 
          或者直接在这里使用 Antd Modal 重写逻辑。
          为了保持代码整洁，建议将原 ProgramsPage 中的 密码/项目管理 逻辑抽离。
@@ -831,18 +1036,18 @@ const ProgramsPage = () => {
       {showProjectModal && (
         <ProjectManageModal
           open={showProjectModal}
-          onClose={() => { setShowProjectModal(false); fetchProjects(); }}
-          onRefresh={() => { fetchProjects(); }}
+          onClose={() => {
+            setShowProjectModal(false);
+            fetchProjects();
+          }}
+          onRefresh={() => {
+            fetchProjects();
+          }}
           projects={projects}
         />
       )}
 
-      {showPwdModal && (
-        <ChangePasswordModal
-          open={showPwdModal}
-          onClose={() => setShowPwdModal(false)}
-        />
-      )}
+      {showPwdModal && <ChangePasswordModal open={showPwdModal} onClose={() => setShowPwdModal(false)} />}
     </div>
   );
 };

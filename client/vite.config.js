@@ -1,23 +1,27 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
 
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  test: {
+    environment: 'jsdom',
+    globals: true,
+  },
   server: {
     port: 6001,
     proxy: {
       // 将API请求代理到后端服务器
       '/api': {
         target: 'http://localhost:3000',
-        changeOrigin: true
+        changeOrigin: true,
       },
       // 将退出请求代理到后端服务器
       '/logout': {
         target: 'http://localhost:3000',
-        changeOrigin: true
-      }
-    }
+        changeOrigin: true,
+      },
+    },
   },
   build: {
     // 调整代码块大小警告阈值
@@ -36,9 +40,9 @@ export default defineConfig({
           // 将实时通信库单独打包
           socket: ['socket.io-client'],
           // 将HTTP请求库单独打包
-          axios: ['axios']
-        }
-      }
-    }
-  }
-})
+          axios: ['axios'],
+        },
+      },
+    },
+  },
+});

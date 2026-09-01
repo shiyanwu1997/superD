@@ -71,12 +71,15 @@ router.get('/api/projects/:projectId/programs', authMiddleware.verifyToken, auth
     let processes;
     const maxRetries = 2;
     let retryCount = 0;
+    // 项目/配置不存在属于确定性错误，重试无意义，直接失败
+    const nonRetryableMessages = ['项目不存在', '配置不存在'];
 
     while (retryCount <= maxRetries) {
       try {
         processes = await supervisorService.getAllProcesses(projectIdInt);
         break;
       } catch (err) {
+        if (nonRetryableMessages.some(msg => err.message.includes(msg))) throw err;
         retryCount++;
         if (retryCount > maxRetries) throw err;
         await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
