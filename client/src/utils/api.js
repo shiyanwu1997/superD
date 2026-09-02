@@ -198,6 +198,12 @@ export const restartAllPrograms = async (projectId) => {
   return response.data;
 };
 
+// 批量重启程序（并行，服务端一次性执行）
+export const batchRestartPrograms = async (programIds) => {
+  const response = await api.post('/programs/batch-restart', { programIds });
+  return response.data;
+};
+
 // 用户管理 API
 
 // 获取所有用户列表

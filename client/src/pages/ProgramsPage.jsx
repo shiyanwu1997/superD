@@ -51,6 +51,7 @@ import {
   startAllPrograms,
   stopAllPrograms,
   restartAllPrograms,
+  batchRestartPrograms,
   reloadConfig,
   checkProjectStatus,
   getGroups,
@@ -373,11 +374,23 @@ const ProgramsPage = () => {
 
     try {
       if (searchText) {
-        // 逐个操作筛选出的程序
-        for (const p of targets) {
-          if (action === 'start') await startProgram(p.id);
-          if (action === 'stop') await stopProgram(p.id);
-          if (action === 'restart') await restartProgram(p.id);
+        // 筛选出的程序：批量端点并行执行
+        if (action === 'restart') {
+          const res = await batchRestartPrograms(targets.map((p) => p.id));
+          const { succeeded, failed } = res.summary || {};
+          if (failed > 0) {
+            console.error(
+              '批量重启失败明细:',
+              res.results?.filter((r) => !r.success)
+            );
+            message.warning(`重启完成：成功 ${succeeded} / 失败 ${failed}`);
+          }
+        } else {
+          // 启动/停止：逐个操作（后端暂无批量端点）
+          for (const p of targets) {
+            if (action === 'start') await startProgram(p.id);
+            if (action === 'stop') await stopProgram(p.id);
+          }
         }
       } else {
         // 无筛选 → 批量 XML-RPC 调用

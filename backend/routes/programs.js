@@ -398,4 +398,67 @@ router.post('/api/programs/:programId/restart', authMiddleware.verifyToken, auth
   }
 });
 
+// API: 批量重启程序（并行）
+router.post('/api/programs/batch-restart', authMiddleware.verifyToken, authMiddleware.requireScope('programs:write'), async (req, res, next) => {
+  try {
+    const { programIds } = req.body || {};
+    if (!Array.isArray(programIds) || programIds.length === 0) {
+      throw new ApiError(400, 'programIds 不能为空');
+    }
+    const userId = req.session?.user?.id || req.user.userId;
+
+    // 权限校验逐个做：无权限/无效ID 记为失败项，不中断整批
+    const permissionChecks = await Promise.all(
+      programIds.map(async (programId) => {
+        try {
+          const { projectId, programName } = parseProgramId(programId);
+          const allowed = await db.checkUserSpecificProgramPermission(userId, programId);
+          return { programId, projectId, programName, allowed };
+        } catch {
+          return { programId, projectId: null, programName: null, allowed: false, invalid: true };
+        }
+      })
+    );
+
+    const results = await Promise.all(
+      permissionChecks.map(async (check) => {
+        if (!check.allowed) {
+          return {
+            programId: check.programId,
+            programName: check.programName,
+            success: false,
+            message: check.invalid ? '无效的程序ID格式' : '没有权限操作此程序',
+          };
+        }
+        try {
+          const result = await supervisorService.restartProcess(check.projectId, check.programName);
+          return {
+            programId: check.programId,
+            programName: check.programName,
+            success: !!result.success,
+            message: result.success ? `程序 ${check.programName} 已成功重启` : result.message,
+          };
+        } catch (error) {
+          return {
+            programId: check.programId,
+            programName: check.programName,
+            success: false,
+            message: error.message,
+          };
+        }
+      })
+    );
+
+    const succeeded = results.filter(r => r.success).length;
+    res.json({
+      success: true,
+      results,
+      summary: { total: results.length, succeeded, failed: results.length - succeeded },
+    });
+  } catch (error) {
+    if (error instanceof ApiError) return next(error);
+    next(new ApiError(500, '批量重启失败', error.message));
+  }
+});
+
 module.exports = router;
