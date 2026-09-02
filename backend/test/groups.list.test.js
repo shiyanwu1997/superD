@@ -20,7 +20,7 @@ jest.mock('../models/db', () => ({
 
 jest.mock('../middleware/auth', () => ({
   verifyToken: (req, res, next) => {
-    req.user = { userId: 1, username: 'test', roleId: 1 };
+    req.user = { userId: 1, username: 'test', roleId: req.headers['x-test-role'] ? parseInt(req.headers['x-test-role']) : 1 };
     next();
   },
   requireScope: () => (req, res, next) => next(),
@@ -80,5 +80,40 @@ describe('GET /api/groups', () => {
 
     expect(res.status).toBe(200);
     expect(res.body[0].machineCount).toBe(2);
+  });
+
+  test('非超管：空分组不可见（无权限机器的分组应隐藏）', async () => {
+    db.getAllGroups.mockResolvedValue([
+      { id: 1, name: '生产组', description: '' },
+      { id: 5, name: 'gfxcc-prod', description: '' }
+    ]);
+    db.getUserProjects.mockResolvedValue([
+      { id: 6, name: 'mxcc-1', groupId: 1 },
+      { id: 7, name: 'mxcc-2', groupId: 1 }
+    ]);
+
+    const res = await request(app).get('/api/groups').set('x-test-role', '2'); // jess: subadmin
+
+    expect(res.status).toBe(200);
+    const names = res.body.map((g) => g.name);
+    expect(names).toContain('生产组');
+    expect(names).not.toContain('gfxcc-prod');
+  });
+
+  test('超管：空分组可见（便于管理，创建后立即可见）', async () => {
+    db.getAllGroups.mockResolvedValue([
+      { id: 1, name: '生产组', description: '' },
+      { id: 5, name: 'gfxcc-prod', description: '' }
+    ]);
+    db.getUserProjects.mockResolvedValue([
+      { id: 6, name: 'mxcc-1', groupId: 1 }
+    ]);
+
+    const res = await request(app).get('/api/groups').set('x-test-role', '1'); // admin
+
+    expect(res.status).toBe(200);
+    const names = res.body.map((g) => g.name);
+    expect(names).toContain('gfxcc-prod');
+    expect(res.body.find((g) => g.name === 'gfxcc-prod').machineCount).toBe(0);
   });
 });
