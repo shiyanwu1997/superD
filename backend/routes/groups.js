@@ -21,10 +21,11 @@ router.get('/api/groups', authMiddleware.verifyToken, authMiddleware.requireScop
     const userId = req.user.userId;
     const groups = await db.getAllGroups();
     const visibleProjects = await db.getUserProjects(userId);
+    // 空分组也返回：新建分组立即可见，否则"创建成功却在侧边栏看不到"
     const result = groups.map(g => ({
       ...g,
       machineCount: visibleProjects.filter(p => p.groupId === g.id).length
-    })).filter(group => group.machineCount > 0);
+    }));
     res.json(result);
   } catch (error) {
     next(new ApiError(500, '获取分组列表失败', error.message));
