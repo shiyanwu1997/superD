@@ -40,7 +40,14 @@ const machineItem = (p) => ({
 const ProjectSidebar = ({ collapsed, projects, groups, selectedProjectId, isAdmin, onManageClick }) => {
   const navigate = useNavigate();
   const [projectSearchText, setProjectSearchText] = useState('');
-  const [openKeys, setOpenKeys] = useState(() => groups.map((g) => `group-${g.id}`).concat(UNGROUPED_KEY));
+  const [openKeys, setOpenKeys] = useState([]);
+  // 分组是异步加载的：首次拿到分组时默认全部展开（用户手动收起后不再自动展开）
+  // 渲染期间检测首帧 groups，避免 effect 里同步 setState 触发级联渲染
+  const [prevGroupsEmpty, setPrevGroupsEmpty] = useState(true);
+  if (prevGroupsEmpty && groups.length > 0) {
+    setPrevGroupsEmpty(false);
+    setOpenKeys(groups.map((g) => `group-${g.id}`).concat(UNGROUPED_KEY));
+  }
 
   const searched = useMemo(
     () =>

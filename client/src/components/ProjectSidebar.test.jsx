@@ -5,7 +5,7 @@
  * 机器树用 antd Menu 重写后，分组/机器/状态点/导航行为必须保持。
  */
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { test, expect, vi, beforeEach, describe } from 'vitest';
@@ -139,5 +139,54 @@ describe('ProjectSidebar 收窄态', () => {
     expect(container.querySelector('.ant-menu-inline-collapsed')).not.toBeNull();
     // 顶层项仍渲染（全部机器）
     expect(container.textContent).toContain('全部机器');
+  });
+});
+
+describe('ProjectSidebar 异步分组', () => {
+  test('分组异步到达时默认全部展开（首次拿到 groups 前 openKeys 为空）', async () => {
+    // 模拟真实时序：先渲染无分组，再异步拿到分组 —— 初始 useState 捕获不到分组
+    const { rerender } = render(
+      <MemoryRouter initialEntries={['/programs']}>
+        <Routes>
+          <Route
+            path="/programs"
+            element={
+              <ProjectSidebar
+                collapsed={false}
+                projects={[]}
+                groups={[]}
+                selectedProjectId={null}
+                isAdmin={false}
+                onManageClick={vi.fn()}
+              />
+            }
+          />
+        </Routes>
+      </MemoryRouter>
+    );
+    rerender(
+      <MemoryRouter initialEntries={['/programs']}>
+        <Routes>
+          <Route
+            path="/programs"
+            element={
+              <ProjectSidebar
+                collapsed={false}
+                projects={projects}
+                groups={groups}
+                selectedProjectId={null}
+                isAdmin={false}
+                onManageClick={vi.fn()}
+              />
+            }
+          />
+        </Routes>
+      </MemoryRouter>
+    );
+    // 分组到达后应自动展开，机器项直接可见
+    await waitFor(() => {
+      expect(screen.getByText('mxcc-主控')).toBeInTheDocument();
+      expect(screen.getByText('standalone')).toBeInTheDocument();
+    });
   });
 });
