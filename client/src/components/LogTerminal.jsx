@@ -17,20 +17,25 @@ const LogTerminal = ({ programId, logType }) => {
   const [autoScroll, setAutoScroll] = useState(true);
   const pausedRef = useRef(false);
   // 切换程序时重置
-  useEffect(() => { pausedRef.current = false; }, [programId, logType]);
+  useEffect(() => {
+    pausedRef.current = false;
+  }, [programId, logType]);
   const maxLogLines = lt.maxLogLines || 5000;
 
-  const terminalOptions = useMemo(() => ({
-    fontSize: lt.fontSize,
-    fontFamily: lt.fontFamily,
-    theme: lt.theme,
-    scrollback: maxLogLines,
-    allowTransparency: true,
-    lineHeight: 1.2,
-    letterSpacing: 0,
-    wrap: true,
-    convertEol: true,
-  }), [maxLogLines]);
+  const terminalOptions = useMemo(
+    () => ({
+      fontSize: lt.fontSize,
+      fontFamily: lt.fontFamily,
+      theme: lt.theme,
+      scrollback: maxLogLines,
+      allowTransparency: true,
+      lineHeight: 1.2,
+      letterSpacing: 0,
+      wrap: true,
+      convertEol: true,
+    }),
+    [maxLogLines]
+  );
 
   // 检测是否滚动到底部
   const checkAtBottom = useCallback(() => {
@@ -39,12 +44,14 @@ const LogTerminal = ({ programId, logType }) => {
     try {
       const buffer = t.buffer.active;
       return buffer.viewportY >= buffer.baseY + buffer.length - t.rows - 2;
-    } catch { return true; }
+    } catch {
+      return true;
+    }
   }, []);
 
   // 暂停/恢复
   const togglePause = useCallback(() => {
-    setPaused(prev => {
+    setPaused((prev) => {
       const next = !prev;
       pausedRef.current = next;
       return next;
@@ -91,7 +98,7 @@ const LogTerminal = ({ programId, logType }) => {
 
     const socket = io(AppConfig.socket.url, {
       ...AppConfig.socket.options,
-      auth: { token: localStorage.getItem('token') || '' }
+      auth: { token: localStorage.getItem('token') || '' },
     });
     socketRef.current = socket;
 
@@ -128,6 +135,11 @@ const LogTerminal = ({ programId, logType }) => {
       terminal.write('\r\n[日志连接已断开]\r\n');
     });
 
+    socket.on('connect_error', (err) => {
+      setConnected(false);
+      terminal.write(`\r\n[日志服务连接失败: ${err?.message || '未知错误'}]\r\n`);
+    });
+
     return () => {
       if (socket.connected) socket.emit('stop_log_tail');
       socket.disconnect();
@@ -136,18 +148,31 @@ const LogTerminal = ({ programId, logType }) => {
   }, [programId, logType, checkAtBottom]);
 
   const btnStyle = {
-    padding: '2px 10px', fontSize: 12, borderRadius: 4, border: 'none',
-    cursor: 'pointer', color: '#fff', marginLeft: 6
+    padding: '2px 10px',
+    fontSize: 12,
+    borderRadius: 4,
+    border: 'none',
+    cursor: 'pointer',
+    color: '#fff',
+    marginLeft: 6,
   };
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative', display: 'flex', flexDirection: 'column' }}>
       {/* 工具栏 */}
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '4px 12px', background: '#2d2d2d', borderBottom: '1px solid #444',
-        fontSize: 12, color: '#ccc', flexShrink: 0
-      }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '4px 12px',
+          background: '#2d2d2d',
+          borderBottom: '1px solid #444',
+          fontSize: 12,
+          color: '#ccc',
+          flexShrink: 0,
+        }}
+      >
         <span>
           {logType === 'stdout' ? '标准输出' : '标准错误'}
           {connected ? ' ●' : ' ○'}
