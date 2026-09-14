@@ -81,17 +81,14 @@ const ProgramDetailPage = ({ isOpen, onClose, programId }) => {
             </Descriptions>
 
             <div style={{ margin: '16px 0' }}>
-              <Button type="primary" onClick={() => handleAction('start')} disabled={program.status === 'RUNNING'} icon={<PlayCircleOutlined />}>启动</Button>
-              <Button danger onClick={() => handleAction('stop')} disabled={program.status === 'STOPPED'} style={{ marginLeft: 8 }} icon={<PauseCircleOutlined />}>停止</Button>
+              <Button onClick={() => handleAction('start')} disabled={program.status === 'RUNNING'}
+                icon={<PlayCircleOutlined />}
+                style={{ background: '#10b981', borderColor: '#10b981', color: '#fff', fontWeight: 500 }}>启动</Button>
+              <Button danger onClick={() => handleAction('stop')} disabled={program.status === 'STOPPED'}
+                style={{ marginLeft: 8, fontWeight: 500 }} icon={<PauseCircleOutlined />}>停止</Button>
               <Tooltip title={program.status === 'STOPPED' ? '未运行的服务不支持重启' : '重启'}>
-                <Button 
-                  onClick={() => handleAction('restart')} 
-                  style={{ marginLeft: 8 }} 
-                  icon={<ReloadOutlined />}
-                  disabled={program.status === 'STOPPED'}
-                >
-                  重启
-                </Button>
+                <Button onClick={() => handleAction('restart')} style={{ marginLeft: 8, fontWeight: 500 }}
+                  icon={<ReloadOutlined />} disabled={program.status === 'STOPPED'}>重启</Button>
               </Tooltip>
             </div>
 

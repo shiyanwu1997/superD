@@ -1,28 +1,56 @@
+require('dotenv').config({ path: require('path').join(__dirname, '.env') });
+
+const path = require('path');
+const fs = require('fs');
 const express = require('express');
 const session = require('express-session');
 const bodyParser = require('body-parser');
+const helmet = require('helmet');
 const cors = require('cors');
 const bcrypt = require('bcrypt');
 const routes = require('./routes');
 const db = require('./models/db');
-const { SERVER_CONFIG, CORS_CONFIG, STORAGE_CONFIG } = require('./config');
+const { SERVER_CONFIG, CORS_CONFIG, STORAGE_CONFIG, SECURITY_CONFIG } = require('./config');
+
+// 启动时校验必需的环境变量
+const requiredEnvVars = [
+  { key: 'SESSION_SECRET', value: SERVER_CONFIG.SESSION_SECRET, name: 'SESSION_SECRET' },
+  { key: 'JWT_SECRET', value: SERVER_CONFIG.JWT_SECRET, name: 'JWT_SECRET' },
+  { key: 'ENCRYPTION_KEY', value: SECURITY_CONFIG.ENCRYPTION_KEY, name: 'ENCRYPTION_KEY' },
+];
+// MySQL 模式需额外校验数据库密码
+if (STORAGE_CONFIG.TYPE === 'mysql') {
+  requiredEnvVars.push({ key: 'MYSQL_PASSWORD', value: STORAGE_CONFIG.MYSQL.PASSWORD, name: 'MYSQL_PASSWORD' });
+}
+const missingVars = requiredEnvVars.filter(v => !v.value).map(v => v.name);
+if (missingVars.length > 0) {
+  console.error(`缺少必需的环境变量: ${missingVars.join(', ')}`);
+  console.error('请在环境变量或 .env 文件中设置这些值后重新启动');
+  process.exit(1);
+}
 const { initDatabase } = require('./init-db'); // 引入数据库初始化函数
 
 const app = express();
 
 // 中间件配置
-app.use(bodyParser.urlencoded({ extended: true }));
-app.use(bodyParser.json());
-app.use(cors({
-  origin: function(origin, callback) {
-    // 允许本地开发环境的所有请求
-    if (!origin || origin.startsWith('http://localhost:')) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true
+app.use(helmet({ contentSecurityPolicy: false })); // CSP 由前端控制
+app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
+app.use(bodyParser.json({ limit: '10mb' }));
+
+const allowedOrigins = new Set(CORS_CONFIG.ORIGINS);
+app.use(cors((req, callback) => {
+  const origin = req.get('Origin');
+  let isSameOrigin = false;
+  try {
+    isSameOrigin = origin ? new URL(origin).host === req.get('host') : false;
+  } catch {
+    isSameOrigin = false;
+  }
+
+  callback(null, {
+    origin: !origin || isSameOrigin || allowedOrigins.has(origin),
+    credentials: true
+  });
 }));
 
 
@@ -51,14 +79,52 @@ app.use((req, res, next) => {
 app.use(session({
   secret: SERVER_CONFIG.SESSION_SECRET,  // 使用配置文件中的密钥
   resave: false,
-  saveUninitialized: true,
-  cookie: { secure: false }  // HTTPS 环境下设置为 true
+  saveUninitialized: false,
+  cookie: {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 60 * 60 * 1000
+  }
 }));
 
+// 服务 API 令牌的调用审计。认证中间件会在路由执行前填充 req.apiToken。
+app.use((req, res, next) => {
+  const startedAt = Date.now();
+  res.on('finish', () => {
+    if (req.authType !== 'api_token' || !req.apiToken) return;
+    db.createApiAuditEvent({
+      apiTokenId: req.apiToken.id,
+      userId: req.user?.userId,
+      method: req.method,
+      path: req.path,
+      statusCode: res.statusCode,
+      durationMs: Date.now() - startedAt,
+      ip: req.ip
+    }).catch(error => Logger.error('记录 API 调用审计失败', error));
+  });
+  next();
+});
 
+// 生产模式：托管前端静态文件（与API同端口，消除CORS）
+const clientDist = path.join(__dirname, '../client/dist');
+if (fs.existsSync(clientDist)) {
+  app.use(express.static(clientDist));
+}
 
 // 路由
 app.use('/', routes);
+
+// SPA fallback：非API请求返回 index.html
+app.use((req, res, next) => {
+  if (!req.path.startsWith('/api') && !req.path.startsWith('/socket.io')) {
+    const indexPath = path.join(__dirname, '../client/dist/index.html');
+    if (fs.existsSync(indexPath)) {
+      return res.sendFile(indexPath);
+    }
+  }
+  next();
+});
 
 // 引入自定义错误处理
 const { errorHandler, notFoundHandler } = require('./utils/errors');

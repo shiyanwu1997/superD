@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>local.superd</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/arch</string>
+    <string>-arm64</string>
+    <string>/Users/wushiyan/node_versions/node-v22.21.1-darwin-arm64/bin/node</string>
+    <string>app.js</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>/Users/wushiyan/Downloads/wsy/superD/backend</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>SESSION_SECRET</key>
+    <string>local-session-secret-2026</string>
+    <key>JWT_SECRET</key>
+    <string>local-jwt-secret-2026</string>
+    <key>ENCRYPTION_KEY</key>
+    <string>local-encryption-key-2026</string>
+    <key>PORT</key>
+    <string>3000</string>
+    <key>NODE_ENV</key>
+    <string>development</string>
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/tmp/superd-local.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/superd-local-error.log</string>
+</dict>
+</plist>

@@ -41,10 +41,10 @@ pool.on('enqueue', () => {
 });
 
 // 带日志的查询包装函数，支持连接重试
-const queryWithLogs = async (sql, params = [], retryCount = 3, retryDelay = 50000) => {
+const queryWithLogs = async (sql, params = [], retryCount = 3, retryDelay = 1000) => {
   const start = Date.now();
   
-  Logger.debug('数据库查询', { sql, params, retryCount });
+  Logger.debug('数据库查询', { sql, paramCount: params.length, retryCount });
   
   try {
     // 使用原始pool.query以避免递归调用
@@ -155,19 +155,23 @@ async function getUserByUsername(username) {
 async function getUserProjects(userId) {
   const [userRows] = await queryWithLogs('SELECT * FROM users WHERE id = ?', [userId]);
   if (userRows.length === 0) return [];
-  
-  // admin用户默认拥有所有项目权限
-  if (userRows[0].username === 'admin') {
-    return getAllProjects();
-  }
-  
-  // 获取普通用户有权限的项目
+
+  if (userRows[0].username === 'admin') return getAllProjects();
+
   const [permRows] = await queryWithLogs('SELECT projectId FROM user_project_permissions WHERE userId = ?', [userId]);
-  const projectIds = permRows.map(p => p.projectId);
-  
-  if (projectIds.length === 0) return [];
-  
-  const [projectRows] = await queryWithLogs('SELECT * FROM projects WHERE id IN (?)', [projectIds]);
+  const projectIds = new Set(permRows.map(p => p.projectId));
+
+  // 程序权限也隐含项目可见性
+  const [progRows] = await queryWithLogs('SELECT programId FROM user_program_permissions WHERE userId = ?', [userId]);
+  for (const p of progRows) {
+    const pid = parseInt(p.programId.split('-')[0]);
+    if (!isNaN(pid)) projectIds.add(pid);
+  }
+
+  if (projectIds.size === 0) return [];
+
+  const ids = [...projectIds];
+  const [projectRows] = await queryWithLogs('SELECT * FROM projects WHERE id IN (?)', [ids]);
   // 将每个项目的JSON字符串解析为对象
   return projectRows.map(project => {
     if (project.supervisorConfig) {
@@ -260,42 +264,22 @@ async function getProjectById(projectId) {
 
 // 创建新项目
 async function createProject(name, description, host, port, username, password) {
-  // 检查项目名称是否已存在
   const [existingRows] = await queryWithLogs('SELECT * FROM projects WHERE name = ?', [name]);
-  if (existingRows.length > 0) {
-    return null; // 项目名称已存在
-  }
-  
-  // 生成新的项目ID
-  const [maxIdRows] = await queryWithLogs('SELECT MAX(id) as maxId FROM projects');
-  const newId = maxIdRows[0].maxId ? maxIdRows[0].maxId + 1 : 1;
-  
-  // 加密密码
+  if (existingRows.length > 0) return null;
+
   const encryptedPassword = encrypt(password);
-  
-  const supervisorConfigObj = {
-    host,
-    port,
-    username,
-    password: encryptedPassword
-  };
-  
-  const newProject = {
-    id: newId,
-    name,
-    description,
-    supervisorConfig: JSON.stringify(supervisorConfigObj)
-  };
-  
-  await queryWithLogs('INSERT INTO projects SET ?', newProject);
-  
-  // 返回解析后的项目数据（包含解密后的密码）
+  const supervisorConfigObj = { host, port, username, password: encryptedPassword };
+
+  const [result] = await queryWithLogs(
+    'INSERT INTO projects (name, description, supervisorConfig) VALUES (?, ?, ?)',
+    [name, description || '', JSON.stringify(supervisorConfigObj)]
+  );
+
   return {
-    ...newProject,
-    supervisorConfig: {
-      ...supervisorConfigObj,
-      password: password
-    }
+    id: result.insertId,
+    name,
+    description: description || '',
+    supervisorConfig: { ...supervisorConfigObj, password: password || '' }
   };
 }
 
@@ -396,31 +380,23 @@ async function deleteProject(projectId) {
 }
 
 // 创建新用户
-async function createUser(username, password, roleId = 2, createdBy = null) {
-  // 检查用户名是否已存在
+async function createUser(username, password, roleId = 2, createdBy = null, status = 'active') {
   const [existingRows] = await queryWithLogs('SELECT * FROM users WHERE username = ?', [username]);
-  if (existingRows.length > 0) {
-    return null;
-  }
-  
-  // 生成新用户ID
-  const [maxIdRows] = await queryWithLogs('SELECT MAX(id) as maxId FROM users');
-  const newId = maxIdRows[0].maxId ? maxIdRows[0].maxId + 1 : 1;
-  
-  const newUser = {
-    id: newId,
-    username,
-    password,
-    roleId
-  };
-  
-  // 只有当createdBy不为null时才添加到新用户对象中
-  if (createdBy !== null) {
-    newUser.createdBy = createdBy;
-  }
-  
-  await queryWithLogs('INSERT INTO users SET ?', newUser);
-  return newUser;
+  if (existingRows.length > 0) return null;
+
+  const [result] = await queryWithLogs(
+    'INSERT INTO users (username, password, roleId, createdBy, status) VALUES (?, ?, ?, ?, ?)',
+    [username, password, roleId, createdBy || null, status]
+  );
+  return { id: result.insertId, username, password, roleId, createdBy, status };
+}
+
+// 更新用户审核状态
+async function updateUserStatus(userId, status) {
+  const [existingRows] = await queryWithLogs('SELECT * FROM users WHERE id = ?', [userId]);
+  if (existingRows.length === 0) return false;
+  await queryWithLogs('UPDATE users SET status = ? WHERE id = ?', [status, userId]);
+  return true;
 }
 
 // 删除用户
@@ -558,10 +534,188 @@ async function updateUserPassword(userId, newPassword) {
   return true;
 }
 
+// ==================== 程序级权限（细粒度控制） ====================
+
+const getUserProgramPermissions = async (userId) => {
+  const [rows] = await queryWithLogs('SELECT * FROM user_program_permissions WHERE userId = ?', [userId]);
+  return rows;
+};
+
+const addUserProgramPermission = async (userId, programId) => {
+  const [userRows] = await queryWithLogs('SELECT * FROM users WHERE id = ?', [userId]);
+  if (userRows.length > 0 && userRows[0].username === 'admin') return true;
+
+  const [existingRows] = await queryWithLogs('SELECT * FROM user_program_permissions WHERE userId = ? AND programId = ?', [userId, programId]);
+  if (existingRows.length > 0) return true;
+
+  await queryWithLogs('INSERT INTO user_program_permissions (userId, programId) VALUES (?, ?)', [userId, programId]);
+  return true;
+};
+
+const removeUserProgramPermission = async (userId, programId) => {
+  await queryWithLogs('DELETE FROM user_program_permissions WHERE userId = ? AND programId = ?', [userId, programId]);
+  return true;
+};
+
+// 检查用户是否有程序操作权限（程序级优先，项目级兜底）
+const checkUserSpecificProgramPermission = async (userId, programId) => {
+  const [userRows] = await queryWithLogs('SELECT * FROM users WHERE id = ?', [userId]);
+  if (userRows.length === 0) return false;
+  if (userRows[0].username === 'admin') return true;
+
+  // 先检查程序级显式权限
+  const [permRows] = await queryWithLogs('SELECT * FROM user_program_permissions WHERE userId = ? AND programId = ?', [userId, programId]);
+  if (permRows.length > 0) return true;
+
+  // 再检查项目级权限（兜底）
+  const idParts = programId.toString().split('-');
+  if (idParts.length >= 2) {
+    const projectId = parseInt(idParts[0]);
+    if (!isNaN(projectId)) {
+      return checkUserProjectPermission(userId, projectId);
+    }
+  }
+
+  return false;
+};
+
+// ==================== 项目分组 ====================
+
+const getAllGroups = async () => {
+  const [rows] = await queryWithLogs('SELECT * FROM project_groups ORDER BY id');
+  return rows;
+};
+
+const createGroup = async (name, description = '') => {
+  const [existing] = await queryWithLogs('SELECT id FROM project_groups WHERE name = ?', [name]);
+  if (existing.length > 0) return null;
+  const [result] = await queryWithLogs('INSERT INTO project_groups (name, description) VALUES (?, ?)', [name, description]);
+  return { id: result.insertId, name, description };
+};
+
+const updateGroup = async (groupId, data) => {
+  await queryWithLogs('UPDATE project_groups SET name = ?, description = ? WHERE id = ?', [data.name, data.description || '', groupId]);
+  const [rows] = await queryWithLogs('SELECT * FROM project_groups WHERE id = ?', [groupId]);
+  return rows[0] || null;
+};
+
+const deleteGroup = async (groupId) => {
+  await queryWithLogs('UPDATE projects SET groupId = NULL WHERE groupId = ?', [groupId]);
+  await queryWithLogs('DELETE FROM project_groups WHERE id = ?', [groupId]);
+  return true;
+};
+
+const getProjectsByGroup = async (groupId) => {
+  const [rows] = await queryWithLogs('SELECT * FROM projects WHERE groupId = ?', [groupId]);
+  return rows.map(project => {
+    if (project.supervisorConfig) {
+      try {
+        if (typeof project.supervisorConfig === 'string') project.supervisorConfig = JSON.parse(project.supervisorConfig);
+        if (project.supervisorConfig.password) project.supervisorConfig.password = decrypt(project.supervisorConfig.password);
+      } catch (e) { project.supervisorConfig = null; }
+    }
+    return project;
+  });
+};
+
+const setProjectGroup = async (projectId, groupId) => {
+  await queryWithLogs('UPDATE projects SET groupId = ? WHERE id = ?', [groupId || null, projectId]);
+  return true;
+};
+
+// ==================== 服务 API 令牌与审计 ====================
+
+function parseApiToken(row) {
+  if (!row) return null;
+  return {
+    ...row,
+    scopes: typeof row.scopes === 'string' ? JSON.parse(row.scopes) : row.scopes
+  };
+}
+
+const createApiToken = async (userId, name, tokenHash, scopes, expiresAt) => {
+  const mysqlExpiresAt = new Date(expiresAt).toISOString().slice(0, 19).replace('T', ' ');
+  const [result] = await queryWithLogs(
+    'INSERT INTO api_tokens (userId, name, tokenHash, scopes, expiresAt) VALUES (?, ?, ?, ?, ?)',
+    [userId, name, tokenHash, JSON.stringify(scopes), mysqlExpiresAt]
+  );
+  const [rows] = await queryWithLogs('SELECT * FROM api_tokens WHERE id = ?', [result.insertId]);
+  return parseApiToken(rows[0] || null);
+};
+
+const getActiveApiTokenByHash = async (tokenHash) => {
+  const [rows] = await queryWithLogs(
+    'SELECT * FROM api_tokens WHERE tokenHash = ? AND revokedAt IS NULL AND expiresAt > NOW()',
+    [tokenHash]
+  );
+  return parseApiToken(rows[0] || null);
+};
+
+const getApiTokens = async () => {
+  const [rows] = await queryWithLogs(`
+    SELECT t.id, t.userId, t.name, t.scopes, t.expiresAt, t.lastUsedAt, t.revokedAt, t.createdAt, u.username
+    FROM api_tokens t JOIN users u ON u.id = t.userId
+    ORDER BY t.createdAt DESC, t.id DESC
+  `);
+  return rows.map(parseApiToken);
+};
+
+const touchApiToken = async (tokenId) => {
+  await queryWithLogs('UPDATE api_tokens SET lastUsedAt = NOW() WHERE id = ?', [tokenId]);
+};
+
+const revokeApiToken = async (tokenId) => {
+  const [result] = await queryWithLogs(
+    'UPDATE api_tokens SET revokedAt = NOW() WHERE id = ? AND revokedAt IS NULL', [tokenId]
+  );
+  return result.affectedRows > 0;
+};
+
+const createApiAuditEvent = async ({ apiTokenId, userId, method, path, statusCode, durationMs, ip }) => {
+  await queryWithLogs(`
+    INSERT INTO api_audit_events (apiTokenId, userId, method, path, statusCode, durationMs, ip)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `, [apiTokenId, userId, method, path, statusCode, durationMs, ip || null]);
+};
+
+const getApiAuditEvents = async (limit) => {
+  const [rows] = await queryWithLogs(`
+    SELECT e.*, t.name AS tokenName, u.username
+    FROM api_audit_events e
+    LEFT JOIN api_tokens t ON t.id = e.apiTokenId
+    LEFT JOIN users u ON u.id = e.userId
+    ORDER BY e.id DESC LIMIT ?
+  `, [limit]);
+  return rows;
+};
+
+const addOperationLog = async ({ userId, username, projectId, projectName, programName, action, result = 'success', detail = null }) => {
+  await queryWithLogs(`
+    INSERT INTO operation_logs (userId, username, projectId, projectName, programName, action, result, detail)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `, [userId, username, projectId ?? null, projectName ?? null, programName ?? null, action, result, detail ?? null]);
+};
+
+const getOperationLogs = async ({ page = 1, pageSize = 20, username, projectId, programName, action, from, to } = {}) => {
+  const where = [];
+  const params = [];
+  if (username) { where.push('username = ?'); params.push(username); }
+  if (projectId) { where.push('projectId = ?'); params.push(parseInt(projectId, 10)); }
+  if (programName) { where.push('programName LIKE ?'); params.push(`%${programName}%`); }
+  if (action) { where.push('action = ?'); params.push(action); }
+  if (from) { where.push('createdAt >= ?'); params.push(from); }
+  if (to) { where.push('createdAt <= ?'); params.push(to); }
+  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
+  const [countRows] = await queryWithLogs(`SELECT COUNT(*) as count FROM operation_logs ${whereSql}`, params);
+  const offset = (page - 1) * pageSize;
+  const [logs] = await queryWithLogs(`SELECT * FROM operation_logs ${whereSql} ORDER BY id DESC LIMIT ? OFFSET ?`, [...params, pageSize, offset]);
+  return { logs, total: countRows[0].count };
+};
+
 module.exports = {
   getUserByUsername,
   getUserById,
-  checkUserProgramPermission,
   checkUserProjectPermission,
   getUserProjects,
   getAllProjects,
@@ -572,6 +726,7 @@ module.exports = {
   createUser,
   testConnection,
   deleteUser,
+  updateUserStatus,
   updateUserRole,
   updateUserCreatedBy,
   addUserProjectPermission,
@@ -579,5 +734,24 @@ module.exports = {
   updateUserPassword,
   getAllUsers,
   getAllRoles,
-  getAllUserProjectPermissions
+  getAllUserProjectPermissions,
+  getUserProgramPermissions,
+  addUserProgramPermission,
+  removeUserProgramPermission,
+  checkUserSpecificProgramPermission,
+  getAllGroups,
+  createGroup,
+  updateGroup,
+  deleteGroup,
+  getProjectsByGroup,
+  setProjectGroup,
+  createApiToken,
+  getActiveApiTokenByHash,
+  getApiTokens,
+  touchApiToken,
+  revokeApiToken,
+  createApiAuditEvent,
+  getApiAuditEvents,
+  addOperationLog,
+  getOperationLogs
 };

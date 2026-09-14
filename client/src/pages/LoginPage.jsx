@@ -1,61 +1,139 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { Button, Input, Card, Typography, Alert, Space } from 'antd';
+import { UserOutlined, LockOutlined } from '@ant-design/icons';
+import { getRegistrationStatus } from '../utils/api';
+
+const { Text } = Typography;
 
 const LoginPage = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [registerEnabled, setRegisterEnabled] = useState(false);
   const { login } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    // 注册开关由后端配置下发；失败时保守隐藏入口
+    getRegistrationStatus()
+      .then((data) => setRegisterEnabled(!!data.enabled))
+      .catch(() => setRegisterEnabled(false));
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    e.stopPropagation();
     setError('');
-    console.log('Form submitted, preventing default and propagation');
-    
+    setLoading(true);
     try {
-      console.log('Attempting login with username:', username);
       const result = await login(username, password);
-      console.log('Login result:', result);
-      if (!result.success) {
-        setError(result.error || '登录失败，请检查用户名和密码');
-      }
-    } catch (error) {
-      console.error('Login error:', error);
-      setError('登录过程中发生错误: ' + error.message);
+      if (!result.success) setError(result.error || '用户名或密码错误');
+    } catch {
+      setError('登录失败，请检查网络连接');
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="login-container">
-      <div className="login-form">
-        <h2>Supervisor</h2>
-        {error && <div className="error-message">{error}</div>}
+    <div
+      style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: '#f8fafc',
+      }}
+    >
+      <Card
+        style={{
+          width: 400,
+          borderRadius: 16,
+          border: '1px solid #e2e8f0',
+          boxShadow: '0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04)',
+        }}
+        bodyStyle={{ padding: '40px 32px' }}
+      >
+        <div style={{ textAlign: 'center', marginBottom: 36 }}>
+          <div
+            data-testid="logo-capsule"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 10,
+              background: '#f1f5f9',
+              border: '1px solid #e2e8f0',
+              padding: '8px 24px 8px 10px',
+              borderRadius: 999,
+            }}
+          >
+            <svg width="34" height="34" viewBox="0 0 40 40" fill="none">
+              <circle cx="20" cy="20" r="19" stroke="#111" strokeWidth="2" fill="#111" />
+              <text
+                x="20"
+                y="27"
+                textAnchor="middle"
+                fill="#fff"
+                fontSize="22"
+                fontWeight="700"
+                fontFamily="Inter, sans-serif"
+              >
+                S
+              </text>
+            </svg>
+            <span style={{ color: '#111', fontWeight: 700, fontSize: 20, letterSpacing: '-.3px' }}>Supervisor</span>
+          </div>
+          <div style={{ marginTop: 8 }}>
+            <Text style={{ color: '#64748b', fontSize: 13 }}>进程管理平台</Text>
+          </div>
+        </div>
+
+        {error && <Alert message={error} type="error" showIcon style={{ marginBottom: 20, borderRadius: 999 }} />}
+
         <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label htmlFor="username">用户名</label>
-            <input
-              type="text"
-              id="username"
+          <Space direction="vertical" size={16} style={{ width: '100%' }}>
+            <Input
+              size="large"
+              prefix={<UserOutlined style={{ color: '#94a3b8' }} />}
+              placeholder="用户名"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               required
+              className="login-capsule-input"
+              style={{ height: 44 }}
             />
-          </div>
-          <div className="form-group">
-            <label htmlFor="password">密码</label>
-            <input
-              type="password"
-              id="password"
+            <Input.Password
+              size="large"
+              prefix={<LockOutlined style={{ color: '#94a3b8' }} />}
+              placeholder="密码"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+              className="login-capsule-input"
+              style={{ height: 44 }}
             />
-          </div>
-          <button type="submit" className="login-button">登录</button>
+            <Button
+              type="primary"
+              htmlType="submit"
+              size="large"
+              loading={loading}
+              className="ant-btn-login-capsule"
+              style={{ marginTop: 4, width: 160, display: 'block', margin: '4px auto 0' }}
+            >
+              登录
+            </Button>
+            {registerEnabled && (
+              <div style={{ textAlign: 'center', marginTop: 4 }}>
+                <a onClick={() => navigate('/register')} style={{ color: '#64748b', fontSize: 13, cursor: 'pointer' }}>
+                  没有账号？注册账号
+                </a>
+              </div>
+            )}
+          </Space>
         </form>
-
-      </div>
+      </Card>
     </div>
   );
 };

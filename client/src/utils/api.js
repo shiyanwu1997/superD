@@ -4,56 +4,34 @@ import axios from 'axios';
  * 创建axios实例的基础配置
  */
 const baseAxiosConfig = {
-  baseURL: import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : 'http://localhost:3000/api',
+  baseURL: import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : '/api',
   withCredentials: true,
   headers: {
-    'Content-Type': 'application/json'
-  }
+    'Content-Type': 'application/json',
+  },
 };
 
-/**
- * 创建通用的请求日志拦截器
- * @param {string} logPrefix - 日志前缀
- * @returns {function} 拦截器函数
- */
-const createRequestLogger = (logPrefix = 'API') => {
-  return config => {
-    console.log(`[${new Date().toISOString()}] ${logPrefix}请求: ${config.method.toUpperCase()} ${config.url}`);
-    console.log(`请求参数: ${JSON.stringify(config.params || {}, null, 2)}`);
-    console.log(`请求数据: ${JSON.stringify(config.data || {}, null, 2)}`);
+const isDev = import.meta.env.DEV;
+
+const createRequestLogger = () => {
+  return (config) => {
+    if (isDev) console.log(`[API] ${config.method.toUpperCase()} ${config.url}`);
     return config;
   };
 };
 
-/**
- * 创建通用的响应日志拦截器
- * @param {string} logPrefix - 日志前缀
- * @returns {function} 拦截器函数
- */
-const createResponseLogger = (logPrefix = 'API') => {
-  return response => {
-    console.log(`[${new Date().toISOString()}] ${logPrefix}响应: ${response.config.method.toUpperCase()} ${response.config.url} ${response.status}`);
-    console.log(`响应数据: ${JSON.stringify(response.data, null, 2)}`);
+const createResponseLogger = () => {
+  return (response) => {
+    if (isDev) console.log(`[API] ${response.status} ${response.config.url}`);
     return response;
   };
 };
 
-/**
- * 创建通用的错误日志拦截器
- * @param {string} logPrefix - 日志前缀
- * @returns {function} 拦截器函数
- */
-const createErrorLogger = (logPrefix = 'API') => {
-  return error => {
-    console.error(`[${new Date().toISOString()}] ${logPrefix}响应错误: ${error.config?.method?.toUpperCase()} ${error.config?.url}`);
-    if (error.response) {
-      console.error(`错误状态码: ${error.response.status}`);
-      console.error(`错误数据: ${JSON.stringify(error.response.data, null, 2)}`);
-    } else if (error.request) {
-      console.error(`请求已发送但未收到响应: ${JSON.stringify(error.request, null, 2)}`);
-    } else {
-      console.error(`请求配置错误: ${error.message}`);
-    }
+const createErrorLogger = () => {
+  return (error) => {
+    console.error(
+      `[API] ${error.config?.method?.toUpperCase()} ${error.config?.url} - ${error.response?.status || error.message}`
+    );
     return Promise.reject(error);
   };
 };
@@ -63,40 +41,52 @@ const createErrorLogger = (logPrefix = 'API') => {
  * @param {Object} config - axios配置对象
  * @returns {Object} 配置对象
  */
-const authInterceptor = config => {
+const authInterceptor = (config) => {
   // 从localStorage获取令牌（如果存在）
   const token = localStorage.getItem('token');
-  
+
   // 如果令牌存在，添加到请求头
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
-  
+
   return config;
 };
 
 // 创建主API实例
 const api = axios.create({
   ...baseAxiosConfig,
-  timeout: 28000 // 延长超时时间到28秒，以匹配后端优化后的启动检查时间
+  timeout: 28000, // 延长超时时间到28秒，以匹配后端优化后的启动检查时间
 });
 
 // 创建连接状态检查专用API实例
 const checkStatusApi = axios.create({
   ...baseAxiosConfig,
-  timeout: 6000 // 适度延长连接状态检查超时时间
+  timeout: 6000, // 适度延长连接状态检查超时时间
 });
+
+// 401 自动跳转登录（两个实例共用，避免 checkStatusApi 吞掉 401 导致用户无法回到登录页）
+const unauthorizedInterceptor = (error) => {
+  if (error.response?.status === 401) {
+    localStorage.removeItem('token');
+    if (window.location.pathname !== '/login') {
+      window.location.replace('/login');
+    }
+    error._handled = true;
+  }
+  return Promise.reject(error);
+};
 
 // 为api实例添加拦截器
 api.interceptors.request.use(createRequestLogger('API'));
 api.interceptors.request.use(authInterceptor);
-api.interceptors.response.use(createResponseLogger('API'));
+api.interceptors.response.use(createResponseLogger('API'), unauthorizedInterceptor);
 api.interceptors.response.use(null, createErrorLogger('API'));
 
 // 为checkStatusApi实例添加拦截器
 checkStatusApi.interceptors.request.use(createRequestLogger('状态检查'));
 checkStatusApi.interceptors.request.use(authInterceptor);
-checkStatusApi.interceptors.response.use(createResponseLogger('状态检查'));
+checkStatusApi.interceptors.response.use(createResponseLogger('状态检查'), unauthorizedInterceptor);
 checkStatusApi.interceptors.response.use(null, createErrorLogger('状态检查'));
 
 // 获取项目列表
@@ -107,20 +97,22 @@ export const getProjects = async () => {
 
 // 登录请求
 export const login = async (username, password) => {
-  console.log('api.login called with:', username);
-  const response = await api.post('/login', {
-    username,
-    password,
-  }, {
-    headers: {
-      'Content-Type': 'application/json'
+  const response = await api.post(
+    '/login',
+    {
+      username,
+      password,
     },
-    withCredentials: true,
-    validateStatus: function (status) {
-      return status >= 200 && status < 300; // 只接受2xx状态码
+    {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      withCredentials: true,
+      validateStatus: function (status) {
+        return status >= 200 && status < 300; // 只接受2xx状态码
+      },
     }
-  });
-  console.log('api.login response:', response);
+  );
   return response.data;
 };
 
@@ -129,24 +121,34 @@ export const getUserInfo = async () => {
   try {
     const response = await api.get('/user');
     return response.data;
-  } catch (error) {
-    console.error('getUserInfo error:', error);
-    // 认证失败时抛出错误，让调用者处理
+  } catch {
     throw new Error('获取用户信息失败，认证可能已过期');
   }
+};
+
+// 查询注册功能是否开放（无鉴权，登录页据此显示/隐藏注册入口）
+export const getRegistrationStatus = async () => {
+  const response = await api.get('/registration/status');
+  return response.data;
+};
+
+// 用户注册（提交后需超级管理员审核）
+export const register = async (username, password) => {
+  const response = await api.post('/register', { username, password });
+  return response.data;
+};
+
+// 审核通过注册用户（仅超级管理员）
+export const approveUser = async (userId) => {
+  const response = await api.post(`/users/${userId}/approve`);
+  return response.data;
 };
 
 // 原getProjects函数已移至文件顶部
 
 // 获取项目下的程序列表
 export const getProgramsByProject = async (projectId, options = {}) => {
-  console.log('发送getProgramsByProject请求:', projectId);
   const response = await api.get(`/projects/${projectId}/programs`, options);
-  console.log('getProgramsByProject响应数据:', response.data);
-  // 检查每个程序是否包含uptime字段
-  response.data.forEach(program => {
-    console.log(`程序 ${program.name} 的uptime字段:`, program.uptime);
-  });
   return response.data;
 };
 
@@ -196,22 +198,6 @@ export const restartProgram = async (programId) => {
   return response.data;
 };
 
-// 获取程序标准输出日志
-export const getProgramStdout = async (programId, offset = 0, length = 10000) => {
-  const response = await api.get(`/programs/${programId}/stdout`, {
-    params: { offset, length }
-  });
-  return response.data;
-};
-
-// 获取程序标准错误日志
-export const getProgramStderr = async (programId, offset = 0, length = 10000) => {
-  const response = await api.get(`/programs/${programId}/stderr`, {
-    params: { offset, length }
-  });
-  return response.data;
-};
-
 // 启动所有程序
 export const startAllPrograms = async (projectId) => {
   const response = await api.post(`/projects/${projectId}/programs/start-all`);
@@ -227,6 +213,12 @@ export const stopAllPrograms = async (projectId) => {
 // 重启所有程序
 export const restartAllPrograms = async (projectId) => {
   const response = await api.post(`/projects/${projectId}/programs/restart-all`);
+  return response.data;
+};
+
+// 批量重启程序（并行，服务端一次性执行）
+export const batchRestartPrograms = async (programIds) => {
+  const response = await api.post('/programs/batch-restart', { programIds });
   return response.data;
 };
 
@@ -307,5 +299,54 @@ export const updateProject = async (id, projectData) => {
 // 删除项目
 export const deleteProject = async (id) => {
   const response = await api.delete(`/projects/${id}`);
+  return response.data;
+};
+
+// ==================== 分组管理 ====================
+
+export const getGroups = async () => {
+  const response = await api.get('/groups');
+  return response.data;
+};
+
+export const createGroup = async (name, description) => {
+  const response = await api.post('/groups', { name, description });
+  return response.data;
+};
+
+export const deleteGroup = async (id) => {
+  const response = await api.delete(`/groups/${id}`);
+  return response.data;
+};
+
+export const setProjectGroup = async (projectId, groupId) => {
+  const response = await api.put(`/projects/${projectId}/group`, { groupId });
+  return response.data;
+};
+
+export const reloadConfig = async (projectId) => {
+  const response = await api.post(`/projects/${projectId}/reload`);
+  return response.data;
+};
+
+// ==================== 程序级权限 ====================
+
+export const getUserProgramPermissions = async (userId) => {
+  const response = await api.get(`/users/${userId}/program-permissions`);
+  return response.data;
+};
+
+export const addUserProgramPermission = async (userId, programId) => {
+  const response = await api.post(`/users/${userId}/program-permissions`, { programId });
+  return response.data;
+};
+
+export const removeUserProgramPermission = async (userId, programId) => {
+  const response = await api.delete(`/users/${userId}/program-permissions/${programId}`);
+  return response.data;
+};
+
+export const getOperationLogs = async (params) => {
+  const response = await api.get('/operation-logs', { params });
   return response.data;
 };

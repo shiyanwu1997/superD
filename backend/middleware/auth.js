@@ -1,6 +1,9 @@
 const jwt = require('jsonwebtoken');
 const db = require('../models/db');
 const { SERVER_CONFIG } = require('../config');
+const Logger = require('../utils/logger');
+const { API_TOKEN_PREFIX } = require('../utils/apiToken');
+const { hashApiToken } = require('../utils/apiToken');
 
 // 生成JWT令牌
 function generateToken(user) {
@@ -11,33 +14,58 @@ function generateToken(user) {
   );
 }
 
-// 验证JWT令牌
-function verifyToken(req, res, next) {
-  const token = req.headers.authorization?.split(' ')[1] || req.session.token;
-  
-  if (!token) {
-    return res.status(401).json({ message: '未授权访问' });
+async function authenticateBearerToken(token) {
+  if (token.startsWith(API_TOKEN_PREFIX)) {
+    const apiToken = await db.getActiveApiTokenByHash(hashApiToken(token));
+    if (!apiToken) throw new Error('Invalid API token');
+
+    const user = await db.getUserById(apiToken.userId);
+    if (!user) throw new Error('Invalid API token user');
+    if (user.status === 'pending') throw new Error('User pending approval');
+
+    // 更新使用时间不应阻塞正常的 API 调用。
+    db.touchApiToken(apiToken.id).catch(error => Logger.error('更新 API 令牌使用时间失败', error));
+    return {
+      user: { userId: user.id, username: user.username, roleId: user.roleId },
+      authType: 'api_token',
+      apiToken: { id: apiToken.id, name: apiToken.name, scopes: apiToken.scopes }
+    };
   }
-  
+
+  const decoded = jwt.verify(token, SERVER_CONFIG.JWT_SECRET);
+  const user = await db.getUserById(decoded.userId);
+  if (!user) throw new Error('Invalid JWT user');
+  if (user.status === 'pending') throw new Error('User pending approval');
+  return {
+    user: { userId: user.id, username: user.username, roleId: user.roleId },
+    authType: 'jwt',
+    apiToken: null
+  };
+}
+
+// 验证 JWT 或服务 API 令牌。
+async function verifyToken(req, res, next) {
+  const authorization = req.headers.authorization;
+  const token = authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
+  if (!token) return res.status(401).json({ message: '未授权访问' });
+
   try {
-    const decoded = jwt.verify(token, SERVER_CONFIG.JWT_SECRET);
-    req.user = decoded;
+    const authenticated = await authenticateBearerToken(token);
+    req.user = authenticated.user;
+    req.authType = authenticated.authType;
+    req.apiToken = authenticated.apiToken;
     next();
   } catch (error) {
     return res.status(401).json({ message: '无效的令牌' });
   }
 }
 
-// 检查用户是否有程序操作权限
-function checkProgramPermission(req, res, next) {
-  const { programId } = req.params;
-  const userId = req.user.userId;
-  
-  if (!db.checkUserProgramPermission(userId, parseInt(programId))) {
-    return res.status(403).json({ message: '没有权限操作此程序' });
-  }
-  
-  next();
+function requireScope(scope) {
+  return (req, res, next) => {
+    if (req.authType !== 'api_token') return next();
+    if (req.apiToken.scopes.includes('*') || req.apiToken.scopes.includes(scope)) return next();
+    return res.status(403).json({ message: `API 令牌缺少范围: ${scope}` });
+  };
 }
 
 // 检查是否为管理员（包括超级管理员和普通管理员）
@@ -45,6 +73,14 @@ function checkAdmin(req, res, next) {
   const user = req.user;
   if (user.roleId !== 1 && user.roleId !== 2) {
     return res.status(403).json({ message: '只有管理员才能访问此功能' });
+  }
+  next();
+}
+
+// 只有超级管理员可以修改全局机器与分组配置。
+function checkSuperAdmin(req, res, next) {
+  if (req.user.roleId !== 1) {
+    return res.status(403).json({ message: '只有超级管理员才能访问此功能' });
   }
   next();
 }
@@ -78,43 +114,30 @@ async function checkAdminProjectPermission(req, res, next) {
     return next();
   }
   
-  // 特殊情况：允许管理员为自己添加项目权限，即使他当前没有该项目的权限
-  const currentUserId = user.userId;
-  const targetUserId = parseInt(req.params.userId);
-  if (req.method === 'POST' && currentUserId === targetUserId) {
-    // 如果是为自己添加项目权限，跳过权限检查
-    return next();
-  }
-  
   try {
     // 获取项目名称
     const project = await db.getProjectById(projectId);
     const projectName = project ? project.name : '未知项目';
     
-    console.log(`检查管理员 ${adminUser.username}（ID: ${adminUser.id}）是否有项目 ${projectId}（${projectName}）的权限`);
-    
-    // 获取用户的项目权限
-    const userProjectPermissions = await db.getAllUserProjectPermissions();
-    const userPermissions = userProjectPermissions.filter(perm => perm.userId === adminUser.id);
-    console.log(`用户项目权限: ${JSON.stringify(userPermissions)}`);
-    
-    if (!(await db.checkUserProjectPermission(user.userId, projectId))) {
-      console.log(`管理员 ${adminUser.username} 没有项目 ${projectId}（${projectName}）的权限`);
+    Logger.debug(`检查管理员权限`, { adminUser: adminUser.username, projectId, projectName });
+    const hasPermission = await db.checkUserProjectPermission(user.userId, projectId);
+    if (!hasPermission) {
+      Logger.warn(`管理员没有项目权限`, { adminUser: adminUser.username, projectId, projectName });
       return res.status(403).json({ message: '没有权限操作此项目' });
     }
-    
-    console.log(`管理员 ${adminUser.username} 有项目 ${projectId}（${projectName}）的权限`);
     next();
   } catch (error) {
-    console.error('检查项目权限时发生错误:', error);
+    Logger.error('检查项目权限时发生错误:', error);
     return res.status(500).json({ message: '内部服务器错误' });
   }
 }
 
 module.exports = {
   generateToken,
+  authenticateBearerToken,
   verifyToken,
-  checkProgramPermission,
+  requireScope,
   checkAdmin,
+  checkSuperAdmin,
   checkAdminProjectPermission
 };

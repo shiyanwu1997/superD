@@ -41,6 +41,8 @@ const ChangePasswordModal = ({ open, onClose }) => {
       open={open}
       onCancel={onClose}
       footer={null}
+      width={420}
+      bodyStyle={{ maxHeight: '70vh', overflowY: 'auto' }}
     >
       <Form form={passwordForm} onFinish={handleChangePassword} layout="vertical">
         <Form.Item name="oldPassword" label="原密码" rules={[{ required: true }]}>

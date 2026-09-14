@@ -1,29 +1,72 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
-  Layout, Menu, Table, Button, Tag, Space, message,
-  Card, Row, Col, Statistic, Empty, Badge,
-  Typography, Input, Dropdown, Avatar, Tooltip
+  Layout,
+  Menu,
+  Table,
+  Button,
+  Tag,
+  Space,
+  message,
+  Card,
+  Row,
+  Col,
+  Statistic,
+  Empty,
+  Badge,
+  Select,
+  Skeleton,
+  Typography,
+  Input,
+  Dropdown,
+  Avatar,
+  Tooltip,
 } from 'antd';
-import { 
-  AppstoreOutlined, SettingOutlined, LogoutOutlined, UserOutlined, 
-  PlayCircleOutlined, PauseCircleOutlined, ReloadOutlined, 
-  FileTextOutlined, ClusterOutlined, CheckCircleOutlined, 
-  CloseCircleOutlined, ExclamationCircleOutlined, SearchOutlined,
-  MenuFoldOutlined, MenuUnfoldOutlined, ControlOutlined
+import {
+  AppstoreOutlined,
+  SettingOutlined,
+  LogoutOutlined,
+  UserOutlined,
+  PlayCircleOutlined,
+  PauseCircleOutlined,
+  ReloadOutlined,
+  FileTextOutlined,
+  ClusterOutlined,
+  CheckCircleOutlined,
+  CloseCircleOutlined,
+  ExclamationCircleOutlined,
+  SearchOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
+  ControlOutlined,
+  HistoryOutlined,
 } from '@ant-design/icons';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { 
-  getProgramsByProject, startProgram, stopProgram, restartProgram, 
-  getProjects, startAllPrograms, stopAllPrograms, restartAllPrograms,
-  checkProjectStatus
+import {
+  getAllPrograms,
+  getProgramsByProject,
+  startProgram,
+  stopProgram,
+  restartProgram,
+  getProjects,
+  startAllPrograms,
+  stopAllPrograms,
+  restartAllPrograms,
+  batchRestartPrograms,
+  reloadConfig,
+  checkProjectStatus,
+  getGroups,
 } from '../utils/api';
 
 // 引入子组件
 import UsersPage from './UsersPage';
-import ProgramDetailPage from './ProgramDetailPage'; // 日志详情抽屉
-import ProjectManageModal from '../components/modals/ProjectManageModal'; // 建议新建此组件，见下文
-import ChangePasswordModal from '../components/modals/ChangePasswordModal'; // 建议新建此组件
+import OperationLogsModal from '../components/operation/OperationLogsModal';
+import ProgramDetailPage from './ProgramDetailPage';
+import StatsCards from '../components/StatsCards';
+import Logo from '../components/Logo';
+import ProjectSidebar from '../components/ProjectSidebar';
+import ProjectManageModal from '../components/modals/ProjectManageModal';
+import ChangePasswordModal from '../components/modals/ChangePasswordModal';
 
 const { Header, Sider, Content } = Layout;
 const { Title, Text } = Typography;
@@ -32,7 +75,7 @@ const ProgramsPage = () => {
   const { projectId } = useParams();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
-  
+
   // --- 状态管理 ---
   const [collapsed, setCollapsed] = useState(false);
   const [programs, setPrograms] = useState([]);
@@ -40,16 +83,22 @@ const ProgramsPage = () => {
   const [loading, setLoading] = useState(false);
   const [loadingProjects, setLoadingProjects] = useState(true);
   const [searchText, setSearchText] = useState('');
-  const [projectSearchText, setProjectSearchText] = useState('');
-  
+  const [groups, setGroups] = useState([]);
+
   // 页面加载时间状态，用于控制离线状态显示的延迟
-  const [pageLoadTime, setPageLoadTime] = useState(null);
-  
+  const pageLoadTimeRef = useRef(null);
+  const prevProjectRef = useRef(null);
+  // 已确认删除的项目，避免重复提示/循环刷新
+  const deletedProjectRef = useRef(null);
+  // 递增的请求序号：响应返回时若已有更新的请求发出，丢弃本次结果（防止快速切换项目时旧响应覆盖新数据）
+  const fetchSeqRef = useRef(0);
+
   // 操作Loading状态
-  const [actionLoading, setActionLoading] = useState({}); 
+  const [actionLoading, setActionLoading] = useState({});
 
   // 模态框控制
   const [showUsersModal, setShowUsersModal] = useState(false);
+  const [showOpLogsModal, setShowOpLogsModal] = useState(false);
   const [showLogDrawer, setShowLogDrawer] = useState(false);
   const [showProjectModal, setShowProjectModal] = useState(false);
   const [showPwdModal, setShowPwdModal] = useState(false);
@@ -59,186 +108,199 @@ const ProgramsPage = () => {
   const stats = useMemo(() => {
     return {
       total: programs.length,
-      running: programs.filter(p => p.status === 'RUNNING').length,
-      stopped: programs.filter(p => p.status === 'STOPPED').length,
-      error: programs.filter(p => ['FATAL', 'BACKOFF', 'UNKNOWN', 'EXITED'].includes(p.status)).length
+      running: programs.filter((p) => p.status === 'RUNNING').length,
+      stopped: programs.filter((p) => p.status === 'STOPPED').length,
+      error: programs.filter((p) => ['FATAL', 'BACKOFF', 'UNKNOWN', 'EXITED'].includes(p.status)).length,
     };
   }, [programs]);
 
   // 搜索过滤
   const filteredPrograms = useMemo(() => {
     if (!searchText) return programs;
-    return programs.filter(p => p.name.toLowerCase().includes(searchText.toLowerCase()));
+    return programs.filter((p) => p.name.toLowerCase().includes(searchText.toLowerCase()));
   }, [programs, searchText]);
-
-  // 项目搜索过滤
-  const filteredProjects = useMemo(() => {
-    if (!projectSearchText) return projects;
-    return projects.filter(p => 
-      p.name.toLowerCase().includes(projectSearchText.toLowerCase()) ||
-      p.description?.toLowerCase().includes(projectSearchText.toLowerCase())
-    );
-  }, [projects, projectSearchText]);
 
   // --- API 交互 ---
 
-  // 辅助函数：处理连接状态的延迟显示
   const getDelayedConnectionStatus = useCallback((connectionStatus) => {
-    const currentTime = new Date().getTime();
-    const pageLoadDuration = currentTime - pageLoadTime;
-    
-    // 如果页面加载时间未设置或连接成功，则直接返回连接状态
-    if (!pageLoadTime || connectionStatus.connected) {
-      return connectionStatus;
-    }
-    
-    // 如果连接失败且页面加载时间不到5秒，则保持检查中状态
-    if (pageLoadDuration < 5000) {
-      return { connected: null, error: null }; // 显示为检查中
-    }
-    
-    // 如果连接失败且页面加载时间超过5秒，则显示实际状态
+    const loadTime = pageLoadTimeRef.current;
+    if (!loadTime || connectionStatus.connected) return connectionStatus;
+    if (new Date().getTime() - loadTime < 5000) return { connected: null, error: null };
     return connectionStatus;
-  }, [pageLoadTime]);
+  }, []);
+
+  const fetchGroups = useCallback(async () => {
+    try {
+      const data = await getGroups();
+      setGroups(data || []);
+    } catch (e) {
+      console.error('获取分组失败:', e);
+    }
+  }, []);
 
   const fetchProjects = useCallback(async () => {
     try {
       setLoadingProjects(true);
-      
-      // 只在首次加载时记录页面加载时间
-      if (!pageLoadTime) {
-        const loadTime = new Date().getTime();
-        setPageLoadTime(loadTime);
+      await fetchGroups();
+
+      if (!pageLoadTimeRef.current) {
+        pageLoadTimeRef.current = new Date().getTime();
       }
-      console.log('调用getProjects API...');
-      
       const data = await getProjects();
-      console.log('getProjects API返回数据:', JSON.stringify(data, null, 2));
-      
       // 准备包含初始连接状态的项目列表
-      const projectsWithInitialStatus = data.map(project => ({
+      const projectsWithInitialStatus = data.map((project) => ({
         ...project,
-        connectionStatus: { connected: null, error: null } // 初始状态为检查中
+        connectionStatus: { connected: null, error: null }, // 初始状态为检查中
       }));
-      
+
       // 一次性更新项目列表，让用户能看到所有有权限的项目
       setProjects(projectsWithInitialStatus);
-      console.log('Projects状态已更新:', data.length);
-      
+
       // 并行检查所有项目连接状态，提高效率
       const connectionStatusPromises = data.map(async (project) => {
         try {
-          console.log(`检查项目${project.id}连接状态...`);
           // 增加连接状态检查的重试机制
           let connectionStatus;
           let retryCount = 0;
-          const maxRetries = 3;
-          
+          const maxRetries = 1;
+
           while (retryCount <= maxRetries) {
             try {
-              console.log(`开始请求项目${project.id}的连接状态...`);
               connectionStatus = await checkProjectStatus(project.id);
-              console.log(`项目${project.id}连接状态请求成功，返回:`, connectionStatus);
               break;
             } catch (retryError) {
               retryCount++;
-              console.log(`项目${project.id}连接状态检查失败，正在重试(${retryCount}/${maxRetries}):`, retryError);
-              console.log(`错误详情:`, retryError.response?.data || retryError.message);
               if (retryCount > maxRetries) {
                 throw retryError;
               }
               // 等待一段时间后重试，增加重试间隔时间
-              await new Promise(resolve => setTimeout(resolve, 2000 * retryCount));
+              await new Promise((resolve) => setTimeout(resolve, 2000 * retryCount));
             }
           }
-          
+
           // 应用连接状态延迟显示逻辑
           const delayedStatus = getDelayedConnectionStatus(connectionStatus);
-          console.log(`项目${project.id}连接状态(延迟后):`, delayedStatus);
           return { projectId: project.id, connectionStatus: delayedStatus };
         } catch (error) {
           console.error(`检查项目${project.id}连接状态失败:`, error);
-          
+
           // 应用连接状态延迟显示逻辑
           const errorStatus = { connected: false, error: '连接检查失败: ' + error.message };
           const delayedStatus = getDelayedConnectionStatus(errorStatus);
-          
-          return { 
-            projectId: project.id, 
-            connectionStatus: delayedStatus
+
+          return {
+            projectId: project.id,
+            connectionStatus: delayedStatus,
           };
         }
       });
-      
+
       // 等待所有连接状态检查完成
       const connectionStatusResults = await Promise.all(connectionStatusPromises);
-      
+
       // 批量更新连接状态
-      setProjects(prevProjects => {
-        return prevProjects.map(project => {
-          const statusResult = connectionStatusResults.find(result => result.projectId === project.id);
+      setProjects((prevProjects) => {
+        return prevProjects.map((project) => {
+          const statusResult = connectionStatusResults.find((result) => result.projectId === project.id);
           if (statusResult) {
             return {
               ...project,
-              connectionStatus: statusResult.connectionStatus
+              connectionStatus: statusResult.connectionStatus,
             };
           }
           return project;
         });
       });
-      
-      console.log('所有项目连接状态检查完成');
     } catch (error) {
-      console.error('获取项目列表失败:', error);
-      message.error('获取项目列表失败');
-    } finally {
-      setLoadingProjects(false);
-      console.log('项目列表加载完成');
-    }
-  }, [getDelayedConnectionStatus, pageLoadTime]);
-
-  const fetchPrograms = async (pid) => {
-    if (!pid) return;
-    // 统一转换为字符串类型，确保类型安全
-    const projectIdStr = String(pid);
-    const projectIdNum = Number(pid);
-    console.log(`开始获取项目${projectIdStr}的程序列表`);
-    setLoading(true);
-    try {
-      const data = await getProgramsByProject(projectIdStr);
-      console.log(`获取到项目${projectIdStr}的程序列表数据:`, data);
-      
-      // 只保留去重逻辑，移除所有过滤逻辑
-      const uniquePrograms = [...new Map(data.map(program => [program.id, program])).values()];
-      console.log(`去重后的程序列表:`, uniquePrograms);
-      
-      // 返回所有去重后的程序，不做任何过滤
-      setPrograms(uniquePrograms);
-      
-      // 更新项目连接状态为在线
-      setProjects(prevProjects => prevProjects.map(p => 
-        p.id === projectIdNum ? { ...p, connectionStatus: { connected: true, error: null } } : p
-      ));
-      
-      console.log(`项目${projectIdStr}获取程序列表成功，连接状态更新为在线`);
-    } catch (err) {
-      // 切换项目失败时清空列表
-      setPrograms([]);
-      
-      // 获取程序列表失败，记录错误
-      const projectIdStr = String(pid);
-      console.log(`项目${projectIdStr}获取程序列表失败:`, err);
-      
-      // 更新项目连接状态为离线
-      setProjects(prevProjects => prevProjects.map(p => 
-        p.id === projectIdNum ? { ...p, connectionStatus: { connected: false, error: err.message } } : p
-      ));
-      
-      if (!err.message?.includes('cancel')) {
-        message.error(err.response?.data?.error || '获取程序列表失败');
+      if (!error._handled) {
+        console.error('获取项目列表失败:', error);
+        message.error('获取项目列表失败');
       }
     } finally {
-      setLoading(false);
+      setLoadingProjects(false);
+    }
+  }, [getDelayedConnectionStatus, fetchGroups]);
+
+  // showLoading 参数保留以对齐 fetchPrograms 签名，当前实现无需 loading 状态
+  // eslint-disable-next-line no-unused-vars
+  const fetchAllProgramsData = async (showLoading = true) => {
+    try {
+      const data = await getAllPrograms();
+      const uniquePrograms = [...new Map(data.map((program) => [program.id, program])).values()];
+      setPrograms((prev) =>
+        prev.length === 0
+          ? uniquePrograms
+          : prev.map((p) => {
+              const u = uniquePrograms.find((x) => x.id === p.id);
+              return u ? { ...p, status: u.status, state: u.state, uptime: u.uptime } : p;
+            })
+      );
+    } catch {
+      /* silent refresh */
+    }
+  };
+
+  const fetchPrograms = async (pid, showLoading = true) => {
+    if (!pid) return;
+    const projectIdStr = String(pid);
+    const projectIdNum = Number(pid);
+    const seq = ++fetchSeqRef.current;
+    const isStale = () => seq !== fetchSeqRef.current;
+    try {
+      const isNewProject = prevProjectRef.current !== projectIdNum;
+      prevProjectRef.current = projectIdNum;
+
+      if (showLoading) setLoading(true);
+      const data = await getProgramsByProject(projectIdStr);
+      if (isStale()) return; // 已有更新的请求，丢弃旧响应
+      const uniquePrograms = [...new Map(data.map((program) => [program.id, program])).values()];
+
+      // 静默刷新：仅更新状态字段，不触发loading闪光
+      setPrograms((prev) => {
+        if (isNewProject || prev.length === 0) return uniquePrograms;
+        // 如果程序数量变了，全量更新
+        if (prev.length !== uniquePrograms.length) return uniquePrograms;
+        // 否则只更新 status 和 uptime
+        return prev.map((p) => {
+          const updated = uniquePrograms.find((u) => u.id === p.id);
+          return updated ? { ...p, status: updated.status, state: updated.state, uptime: updated.uptime } : p;
+        });
+      });
+
+      // 更新项目连接状态为在线
+      setProjects((prevProjects) =>
+        prevProjects.map((p) =>
+          p.id === projectIdNum ? { ...p, connectionStatus: { connected: true, error: null } } : p
+        )
+      );
+    } catch (err) {
+      // 旧请求的报错不影响当前项目
+      if (isStale()) return;
+      // 项目已被删除：跳回列表页并刷新项目树，避免轮询无限报错
+      const errText = `${err.response?.data?.data || ''} ${err.message || ''}`;
+      if (errText.includes('项目不存在')) {
+        if (deletedProjectRef.current !== projectIdNum) {
+          deletedProjectRef.current = projectIdNum;
+          message.warning('该项目已被删除');
+          navigate('/programs', { replace: true });
+          fetchProjects();
+        }
+        return;
+      }
+      if (showLoading) {
+        setPrograms([]);
+        if (!err._handled && !err.message?.includes('cancel')) {
+          message.error(err.response?.data?.error || '获取程序列表失败');
+        }
+      }
+      // 更新项目连接状态为离线
+      setProjects((prevProjects) =>
+        prevProjects.map((p) =>
+          p.id === projectIdNum ? { ...p, connectionStatus: { connected: false, error: err.message } } : p
+        )
+      );
+    } finally {
+      if (showLoading && !isStale()) setLoading(false);
     }
   };
 
@@ -253,35 +315,27 @@ const ProgramsPage = () => {
   // 已移除5秒后重新检查所有项目连接状态的定时逻辑
   // 仅在页面首次加载时检查一次连接状态
 
-  // 项目切换逻辑
+  // 添加数据加载逻辑，根据URL中的projectId加载数据
   useEffect(() => {
-    // 确保用户已登录
-    if (!user) return;
-    
-    // 确保项目列表加载完成
-    if (loadingProjects) return;
-    
+    if (!user || loadingProjects) return;
     if (projectId) {
-      // React Router v6返回的params已经是字符串，无需再次转换
-      const projectIdStr = projectId;
-      
-      // 无论当前连接状态如何，都尝试获取程序列表
-      // fetchPrograms函数内部会根据获取结果自动更新项目连接状态
-      // 这样可以确保程序列表和项目状态始终保持同步
-      console.log(`项目${projectIdStr}切换，尝试获取程序列表...`);
-      fetchPrograms(projectIdStr);
+      fetchPrograms(projectId);
+    } else {
+      fetchAllProgramsData();
     }
-  }, [projectId, loadingProjects, user, navigate]);
+  }, [projectId, user, loadingProjects]);
 
-  // 连接状态变化时更新程序列表 - 已移除，改为在项目切换和刷新按钮时触发
-  // 避免因为projects状态变化导致的无限循环
-  
-  // 已移除定期检查连接状态的自动刷新逻辑，仅保留首次加载的5秒延迟显示
+  // 自动刷新：每10秒更新进程状态（利用5秒缓存，对Supervisor负载很小）
+  useEffect(() => {
+    const fn = projectId ? () => fetchPrograms(projectId, false) : () => fetchAllProgramsData(false);
+    const timer = setInterval(fn, 10000);
+    return () => clearInterval(timer);
+  }, [projectId]);
 
   // --- 动作处理 ---
 
   const handleAction = async (id, action, name) => {
-    setActionLoading(prev => ({ ...prev, [id]: action }));
+    setActionLoading((prev) => ({ ...prev, [id]: action }));
     try {
       let res;
       if (action === 'start') res = await startProgram(id);
@@ -290,7 +344,7 @@ const ProgramsPage = () => {
 
       if (res.success) {
         message.success(`${name} 指令已发送`);
-        
+
         // 对于重启和启动操作，增加延迟以确保程序有足够时间启动
         if (action === 'restart' || action === 'start') {
           // 给程序一些启动时间
@@ -307,42 +361,52 @@ const ProgramsPage = () => {
     } catch {
       message.error('请求异常');
     } finally {
-      setActionLoading(prev => ({ ...prev, [id]: null }));
+      setActionLoading((prev) => ({ ...prev, [id]: null }));
     }
   };
 
   const handleBatch = async (action, name) => {
-    const hide = message.loading(`正在${name}所有程序...`, 0);
+    const targets = searchText ? filteredPrograms : programs;
+    if (targets.length === 0) {
+      message.warning('没有可操作的程序');
+      return;
+    }
+
+    const label = searchText ? `筛选的 ${targets.length} 个程序` : '所有程序';
+    const hide = message.loading(`正在${name}${label}...`, 0);
+
     try {
-      let res;
-      if (action === 'start') res = await startAllPrograms(projectId);
-      if (action === 'stop') res = await stopAllPrograms(projectId);
-      if (action === 'restart') res = await restartAllPrograms(projectId);
-      
-      console.log(`${name}所有程序结果:`, res);
-      
-      if (res?.success) {
-        hide();
-        message.success(res.message || '批量操作成功');
-        
-        // 对于批量重启和启动操作，增加延迟以确保程序有足够时间启动
-        if (action === 'restart' || action === 'start') {
-          setTimeout(() => {
-            fetchPrograms(projectId);
-          }, 1500); // 批量操作需要更多时间
+      if (searchText) {
+        // 筛选出的程序：批量端点并行执行
+        if (action === 'restart') {
+          const res = await batchRestartPrograms(targets.map((p) => p.id));
+          const { succeeded, failed } = res.summary || {};
+          if (failed > 0) {
+            console.error(
+              '批量重启失败明细:',
+              res.results?.filter((r) => !r.success)
+            );
+            message.warning(`重启完成：成功 ${succeeded} / 失败 ${failed}`);
+          }
         } else {
-          fetchPrograms(projectId);
+          // 启动/停止：逐个操作（后端暂无批量端点）
+          for (const p of targets) {
+            if (action === 'start') await startProgram(p.id);
+            if (action === 'stop') await stopProgram(p.id);
+          }
         }
       } else {
-        hide();
-        message.error(res?.message || '批量操作失败');
+        // 无筛选 → 批量 XML-RPC 调用
+        if (action === 'start') await startAllPrograms(projectId);
+        if (action === 'stop') await stopAllPrograms(projectId);
+        if (action === 'restart') await restartAllPrograms(projectId);
       }
+      hide();
+      message.success(`${name}完成: ${label}`);
+      setTimeout(() => fetchPrograms(projectId), action === 'stop' ? 500 : 1500);
     } catch (error) {
       hide();
-      console.error(`${name}所有程序异常:`, error);
-      // 显示更具体的错误信息
-      const errorMessage = error.response?.data?.message || error.message || '批量操作异常';
-      message.error(errorMessage);
+      if (!error._handled) message.error('操作失败: ' + (error.response?.data?.message || error.message));
     }
   };
 
@@ -350,28 +414,49 @@ const ProgramsPage = () => {
 
   const columns = [
     {
-        title: '状态',
-        dataIndex: 'status',
-        width: 120,
-        render: (status) => {
-          let color = 'default';
-          let icon = null;
-          if (status === 'RUNNING') { color = 'success'; icon = <CheckCircleOutlined />; }
-          else if (status === 'STOPPED') { color = 'error'; icon = <PauseCircleOutlined />; }
-          else if (status === 'STARTING') { color = 'processing'; icon = <ReloadOutlined spin />; }
-          else { color = 'warning'; icon = <ExclamationCircleOutlined />; }
-          return <Tag icon={icon} color={color}>{status}</Tag>;
+      title: '状态',
+      dataIndex: 'status',
+      width: 120,
+      render: (status) => {
+        let color = 'default';
+        let icon = null;
+        if (status === 'RUNNING') {
+          color = 'success';
+          icon = <CheckCircleOutlined />;
+        } else if (status === 'STOPPED') {
+          color = 'error';
+          icon = <PauseCircleOutlined />;
+        } else if (status === 'STARTING') {
+          color = 'processing';
+          icon = <ReloadOutlined spin />;
+        } else {
+          color = 'warning';
+          icon = <ExclamationCircleOutlined />;
         }
+        return (
+          <Tag icon={icon} color={color}>
+            {status}
+          </Tag>
+        );
       },
+    },
     {
       title: '程序名称',
       dataIndex: 'name',
-      width: 300,
-      render: (text) => (
-        <div>
-          <Text strong style={{ fontSize: 14 }}>{text}</Text>
-        </div>
-      )
+      width: 260,
+      ellipsis: { showTitle: false },
+      render: (text) => {
+        // 简化显示：api-kafka-subscribe:api-kafka-subscribe_00 → api-kafka-subscribe_00
+        // 冒号后是纯数字（process_name=%(process_num)02d 裸序号命名）时保留全名，避免只剩 00/01
+        const parts = text.split(':');
+        const last = parts[parts.length - 1];
+        const short = parts.length > 1 && !/^\d+$/.test(last) ? last : text;
+        return (
+          <Tooltip title={text} placement="topLeft">
+            <span style={{ fontSize: 14, fontWeight: 500 }}>{short}</span>
+          </Tooltip>
+        );
+      },
     },
     {
       title: '运行时长',
@@ -381,7 +466,7 @@ const ProgramsPage = () => {
         // 确保只有运行中的程序显示时长，其他状态显示'-'
         if (record.status !== 'RUNNING' || !uptime) return '-';
         return <Text style={{ color: '#666', fontSize: 14 }}>{uptime}</Text>;
-      }
+      },
     },
     {
       title: '操作',
@@ -392,10 +477,10 @@ const ProgramsPage = () => {
         return (
           <Space>
             <Tooltip title="启动">
-              <Button 
-                type="text" 
-                shape="circle" 
-                icon={<PlayCircleOutlined />} 
+              <Button
+                type="text"
+                shape="circle"
+                icon={<PlayCircleOutlined />}
                 style={{ color: record.status === 'RUNNING' ? '#d9d9d9' : '#52c41a' }}
                 disabled={record.status === 'RUNNING' || loadingAction}
                 loading={loadingAction === 'start'}
@@ -403,9 +488,9 @@ const ProgramsPage = () => {
               />
             </Tooltip>
             <Tooltip title="停止">
-              <Button 
-                type="text" 
-                shape="circle" 
+              <Button
+                type="text"
+                shape="circle"
                 danger
                 icon={<PauseCircleOutlined />}
                 disabled={record.status === 'STOPPED' || loadingAction}
@@ -414,19 +499,19 @@ const ProgramsPage = () => {
               />
             </Tooltip>
             <Tooltip title={record.status === 'STOPPED' ? '未运行的服务不支持重启' : '重启'}>
-              <Button 
-                type="text" 
-                shape="circle" 
-                style={{ color: record.status === 'STOPPED' ? '#d9d9d9' : '#1890ff' }}
+              <Button
+                type="text"
+                shape="circle"
+                style={{ color: record.status === 'STOPPED' ? '#d9d9d9' : '#111' }}
                 icon={<ReloadOutlined />}
                 loading={loadingAction === 'restart'}
                 disabled={record.status === 'STOPPED' || loadingAction}
                 onClick={() => handleAction(record.id, 'restart', '重启')}
               />
             </Tooltip>
-            <Button 
-              size="small" 
-              icon={<FileTextOutlined />} 
+            <Button
+              size="small"
+              icon={<FileTextOutlined />}
               onClick={() => {
                 setSelectedProgramId(record.id);
                 setShowLogDrawer(true);
@@ -436,246 +521,101 @@ const ProgramsPage = () => {
             </Button>
           </Space>
         );
-      }
-    }
+      },
+    },
   ];
 
   const userMenu = {
     items: [
-      ...((user?.roleId === 1 || user?.roleId === 2) ? [{
-        key: 'users',
-        label: '用户管理',
-        icon: <UserOutlined />,
-        onClick: () => setShowUsersModal(true)
-      }] : []),
+      ...(user?.roleId === 1 || user?.roleId === 2
+        ? [
+            {
+              key: 'users',
+              label: '用户管理',
+              icon: <UserOutlined />,
+              onClick: () => setShowUsersModal(true),
+            },
+          ]
+        : []),
+      ...(user?.roleId === 1
+        ? [
+            {
+              key: 'oplogs',
+              label: '操作记录',
+              icon: <HistoryOutlined />,
+              onClick: () => setShowOpLogsModal(true),
+            },
+          ]
+        : []),
       { key: 'pwd', label: '修改密码', icon: <SettingOutlined />, onClick: () => setShowPwdModal(true) },
       { type: 'divider' },
-      { key: 'logout', label: '退出登录', icon: <LogoutOutlined />, danger: true, onClick: logout }
-    ]
+      { key: 'logout', label: '退出登录', icon: <LogoutOutlined />, danger: true, onClick: logout },
+    ],
   };
 
   return (
     <div>
       <Layout style={{ minHeight: '100vh' }}>
-        <Sider 
-          trigger={null} 
-          collapsible 
-          collapsed={collapsed} 
-          width={280} 
-          theme="light"
-          style={{ 
-            boxShadow: '2px 0 12px 0 rgba(29,35,41,.06)', 
+        <Sider
+          trigger={null}
+          collapsible
+          collapsed={collapsed}
+          width={280}
+          collapsedWidth={72}
+          style={{
+            boxShadow: '1px 0 0 0 var(--border)',
             zIndex: 10,
-            backgroundColor: '#ffffff',
-            borderRight: '1px solid #f5f5f5'
+            backgroundColor: '#fff',
+            borderRight: 'none',
           }}
         >
-          {/* Logo区域优化 */}
-          <div style={{ 
-            height: 72, 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center', 
-            borderBottom: '1px solid #e8e8e8',
-            background: '#ffffff',
-            color: '#2d3748',
-            boxShadow: '0 1px 4px rgba(0,0,0,0.05)'
-          }}>
-            <ClusterOutlined style={{ fontSize: 32, color: '#2d3748', marginRight: 16 }} />
-            {!collapsed && <span style={{ 
-              fontWeight: '700', 
-              fontSize: 22, 
-              color: '#2d3748',
-              letterSpacing: '0.5px',
-              fontFamily: 'Segoe UI, Roboto, sans-serif',
-              textShadow: '0 1px 2px rgba(0,0,0,0.05)'
-            }}>Supervisor</span>}
+          <div
+            style={{
+              height: 56,
+              display: 'flex',
+              alignItems: 'center',
+              padding: collapsed ? '0 12px' : '0 20px',
+              justifyContent: collapsed ? 'center' : 'flex-start',
+              borderBottom: '1px solid var(--border)',
+            }}
+          >
+            <Logo size={32} collapsed={collapsed} />
           </div>
-          
-          {/* 搜索和项目列表标题区域 */}
-          <div style={{ 
-            padding: '20px 20px 16px', 
-            display: collapsed ? 'none' : 'flex', 
-            flexDirection: 'column', 
-            gap: '16px',
-            backgroundColor: '#ffffff',
-            borderBottom: '1px solid #f0f0f0'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text style={{ 
-                fontSize: 14, 
-                fontWeight: '600',
-                textTransform: 'uppercase',
-                letterSpacing: '1px',
-                color: '#4a5568',
-                fontFamily: 'Segoe UI, Roboto, sans-serif'
-              }}>项目列表 ({filteredProjects.length})</Text>
-              {user?.roleId === 1 && (
-                <Tooltip title="管理项目">
-                  <Button 
-                    type="text" 
-                    size="small" 
-                    icon={<SettingOutlined />} 
-                    onClick={() => setShowProjectModal(true)}
-                    style={{ 
-                      color: '#667eea',
-                      fontSize: '14px',
-                      fontWeight: '500'
-                    }}
-                  />
-                </Tooltip>
-              )}
-            </div>
-            
-            {/* 搜索框优化 */}
-            <Input.Search
-              placeholder="搜索项目名称或描述"
-              allowClear
-              enterButton={<SearchOutlined />}
-              size="middle"
-              value={projectSearchText}
-              onChange={(e) => setProjectSearchText(e.target.value)}
-              style={{ 
-                width: '100%',
-                borderRadius: '12px',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-                borderColor: '#e2e8f0',
-                transition: 'all 0.3s ease',
-                '&:hover': {
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
-                }
-              }}
+
+          <div style={{ height: 'calc(100% - 56px)', overflow: 'hidden' }}>
+            <ProjectSidebar
+              collapsed={collapsed}
+              projects={projects}
+              groups={groups}
+              selectedProjectId={projectId ?? null}
+              isAdmin={user?.roleId === 1}
+              onManageClick={() => setShowProjectModal(true)}
             />
           </div>
-
-          <Menu
-            mode="inline"
-            selectedKeys={[projectId]}
-            style={{ 
-              borderRight: 0, 
-              height: 'calc(100% - 128px)',
-              overflow: 'auto',
-              backgroundColor: '#ffffff'
-            }}
-            items={filteredProjects.map(p => ({
-              key: String(p.id),
-              icon: collapsed ? null : (
-                <div style={{ 
-                  display: 'inline-flex', 
-                  justifyContent: 'center', 
-                  alignItems: 'center',
-                  width: 'auto',
-                  height: 'auto'
-                }}>
-                  <span 
-                    style={{ 
-                      display: 'inline-block',
-                      width: '10px', 
-                      height: '10px',
-                      borderRadius: '50%',
-                      backgroundColor: p.connectionStatus?.connected === true ? '#52c41a' : 
-                                      p.connectionStatus?.connected === null ? '#d9d9d9' : '#ff4d4f',
-                      marginRight: '5px'
-                    }}
-                  />
-                  <span style={{ 
-                    fontSize: '11px', 
-                    color: p.connectionStatus?.connected === true ? '#52c41a' : 
-                             p.connectionStatus?.connected === null ? '#d9d9d9' : '#ff4d4f',
-                    fontWeight: '500'
-                  }}>
-                    {p.connectionStatus?.connected === true ? '在线' : 
-                     p.connectionStatus?.connected === null ? '检查中...' : '离线'}
-                  </span>
-                </div>
-              ),
-              label: collapsed && p.name ? (
-                <Tooltip title={p.name} placement="right">
-                  <div style={{ 
-                    display: 'flex', 
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    width: '100%',
-                    height: '40px',
-                    borderRadius: '4px',
-                    margin: '2px 0',
-                    backgroundColor: projectId === String(p.id) ? '#e6f7ff' : 'transparent',
-                    border: projectId === String(p.id) ? '1px solid #91d5ff' : '1px solid transparent',
-                    boxShadow: projectId === String(p.id) ? '0 2px 6px rgba(145, 213, 255, 0.2)' : 'none',
-                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                    cursor: 'pointer'
-                  }}>
-                    <span style={{ 
-                      display: 'inline-block',
-                      width: '10px', 
-                      height: '10px',
-                      borderRadius: '50%',
-                      backgroundColor: p.connectionStatus?.connected === true ? '#52c41a' : 
-                                      p.connectionStatus?.connected === null ? '#d9d9d9' : '#ff4d4f',
-                      boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-                    }} />
-                  </div>
-                </Tooltip>
-              ) : (
-                <div style={{ 
-                  display: 'flex', 
-                  flexDirection: 'column',
-                  padding: '10px 14px',
-                  borderRadius: '4px',
-                  margin: '2px 6px',
-                  backgroundColor: projectId === String(p.id) ? '#e6f7ff' : 'transparent',
-                  border: projectId === String(p.id) ? '1px solid #91d5ff' : '1px solid #f0f0f0',
-                  boxShadow: projectId === String(p.id) ? '0 2px 6px rgba(145, 213, 255, 0.2)' : 'none',
-                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                  gap: '3px',
-                  cursor: 'pointer'
-                }}>
-                    {!collapsed && (
-                      <div style={{ 
-                        fontWeight: projectId === String(p.id) ? '600' : '500',
-                        color: projectId === String(p.id) ? '#1890ff' : '#2d3748',
-                        fontSize: '14px',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                        fontFamily: 'Segoe UI, Roboto, sans-serif'
-                      }}>
-                        {p.name}
-                      </div>
-                    )}
-
-                    {/* 显示项目中的程序数量（如果有） */}
-                    {!collapsed && p.programsCount !== undefined && (
-                      <div style={{ 
-                        fontSize: '12px', 
-                        color: projectId === String(p.id) ? '#40a9ff' : '#718096',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '3px',
-                        fontWeight: '500'
-                      }}>
-                        <AppstoreOutlined style={{ fontSize: '13px' }} />
-                        {p.programsCount} 个程序
-                      </div>
-                    )}
-                  </div>
-              ),
-              onClick: () => navigate(`/programs/${p.id}`)
-            }))}
-          />
         </Sider>
 
         <Layout>
-          <Header style={{ padding: '0 24px', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 1px 4px rgba(0,21,41,.08)', zIndex: 9 }}>
+          <Header
+            style={{
+              padding: '0 24px',
+              background: '#fff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              borderBottom: '1px solid #e2e8f0',
+              zIndex: 9,
+              height: 56,
+            }}
+          >
             {React.createElement(collapsed ? MenuUnfoldOutlined : MenuFoldOutlined, {
               className: 'trigger',
               onClick: () => setCollapsed(!collapsed),
-              style: { fontSize: 18, cursor: 'pointer' }
+              style: { fontSize: 18, cursor: 'pointer' },
             })}
-            
+
             <Dropdown menu={userMenu}>
               <Space style={{ cursor: 'pointer' }}>
-                <Avatar style={{ backgroundColor: '#1890ff' }} icon={<UserOutlined />} />
+                <Avatar style={{ backgroundColor: '#111' }} icon={<UserOutlined />} />
                 <Text>{user?.username}</Text>
               </Space>
             </Dropdown>
@@ -684,234 +624,174 @@ const ProgramsPage = () => {
           <Content style={{ margin: '24px', minHeight: 280 }}>
             {projectId ? (
               <>
-                {/* 顶部统计卡片 */}
-                <Row gutter={24} style={{ marginBottom: 24 }}>
-                  <Col span={6}>
-                    <Card 
-                      bordered={false} 
-                      hoverable
-                      style={{
-                        borderRadius: '16px',
-                        boxShadow: '0 4px 20px rgba(0,0,0,0.05)',
-                        transition: 'all 0.3s ease',
-                        border: '1px solid #f0f0f0'
-                      }}
-                      onMouseEnter={(e) => e.currentTarget.style.boxShadow = '0 8px 30px rgba(0,0,0,0.12)'}
-                      onMouseLeave={(e) => e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.05)'}
-                    >
-                      <Statistic 
-                        title="总程序数" 
-                        value={stats.total} 
-                        prefix={<AppstoreOutlined style={{ color: '#1890ff' }} />}
-                        valueStyle={{ fontSize: '32px', fontWeight: '700', color: '#2d3748' }}
-                        titleStyle={{ fontSize: '14px', color: '#718096', marginBottom: '8px' }}
-                      />
-                    </Card>
-                  </Col>
-                  <Col span={6}>
-                    <Card 
-                      bordered={false} 
-                      hoverable
-                      style={{
-                        borderRadius: '16px',
-                        boxShadow: '0 4px 20px rgba(0,0,0,0.05)',
-                        transition: 'all 0.3s ease',
-                        border: '1px solid #f0f0f0'
-                      }}
-                      onMouseEnter={(e) => e.currentTarget.style.boxShadow = '0 8px 30px rgba(0,0,0,0.12)'}
-                      onMouseLeave={(e) => e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.05)'}
-                    >
-                      <Statistic 
-                        title="运行中" 
-                        value={stats.running} 
-                        prefix={<CheckCircleOutlined style={{ color: '#38a169' }} />}
-                        valueStyle={{ fontSize: '32px', fontWeight: '700', color: '#2d3748' }}
-                        titleStyle={{ fontSize: '14px', color: '#718096', marginBottom: '8px' }}
-                      />
-                    </Card>
-                  </Col>
-                  <Col span={6}>
-                    <Card 
-                      bordered={false} 
-                      hoverable
-                      style={{
-                        borderRadius: '16px',
-                        boxShadow: '0 4px 20px rgba(0,0,0,0.05)',
-                        transition: 'all 0.3s ease',
-                        border: '1px solid #f0f0f0'
-                      }}
-                      onMouseEnter={(e) => e.currentTarget.style.boxShadow = '0 8px 30px rgba(0,0,0,0.12)'}
-                      onMouseLeave={(e) => e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.05)'}
-                    >
-                      <Statistic 
-                        title="已停止" 
-                        value={stats.stopped} 
-                        prefix={<PauseCircleOutlined style={{ color: '#e53e3e' }} />}
-                        valueStyle={{ fontSize: '32px', fontWeight: '700', color: '#2d3748' }}
-                        titleStyle={{ fontSize: '14px', color: '#718096', marginBottom: '8px' }}
-                      />
-                    </Card>
-                  </Col>
-                  <Col span={6}>
-                    <Card 
-                      bordered={false} 
-                      hoverable
-                      style={{
-                        borderRadius: '16px',
-                        boxShadow: '0 4px 20px rgba(0,0,0,0.05)',
-                        transition: 'all 0.3s ease',
-                        border: '1px solid #f0f0f0'
-                      }}
-                      onMouseEnter={(e) => e.currentTarget.style.boxShadow = '0 8px 30px rgba(0,0,0,0.12)'}
-                      onMouseLeave={(e) => e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.05)'}
-                    >
-                      <Statistic 
-                        title="异常状态" 
-                        value={stats.error} 
-                        prefix={<ExclamationCircleOutlined style={{ color: '#d69e2e' }} />}
-                        valueStyle={{ fontSize: '32px', fontWeight: '700', color: '#2d3748' }}
-                        titleStyle={{ fontSize: '14px', color: '#718096', marginBottom: '8px' }}
-                      />
-                    </Card>
-                  </Col>
-                </Row>
+                <StatsCards stats={stats} />
 
                 {/* 主操作栏 */}
-                <Card 
-                  bordered={false} 
-                  style={{ 
-                    marginBottom: 24, 
+                <Card
+                  bordered={false}
+                  style={{
+                    marginBottom: 24,
                     borderRadius: '16px',
                     boxShadow: '0 4px 20px rgba(0,0,0,0.05)',
-                    border: '1px solid #f0f0f0'
+                    border: '1px solid #f0f0f0',
                   }}
                 >
-                  <div style={{ 
-                    display: 'flex', 
-                    justifyContent: 'space-between', 
-                    alignItems: 'center', 
-                    flexWrap: 'wrap', 
-                    gap: 24 
-                  }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      flexWrap: 'wrap',
+                      gap: 24,
+                    }}
+                  >
                     <Space size="large" align="center">
-                      <Title level={4} style={{ 
-                        margin: 0, 
-                        color: '#2d3748', 
-                        fontSize: '20px',
-                        fontWeight: '700',
-                        fontFamily: 'Segoe UI, Roboto, sans-serif'
-                      }}>
-                        {projects.find(p => String(p.id) === projectId)?.name || '未命名项目'}
+                      <Title
+                        level={4}
+                        style={{
+                          margin: 0,
+                          color: '#2d3748',
+                          fontSize: '20px',
+                          fontWeight: '700',
+                          fontFamily: 'Segoe UI, Roboto, sans-serif',
+                        }}
+                      >
+                        {projects.find((p) => String(p.id) === projectId)?.name || '未命名项目'}
                       </Title>
-                      <Input 
-                        placeholder="搜索程序..." 
-                        prefix={<SearchOutlined style={{ color: '#a0aec0' }} />} 
+                      <Input
+                        placeholder="搜索程序..."
+                        prefix={<SearchOutlined style={{ color: '#a0aec0' }} />}
                         allowClear
-                        onChange={e => setSearchText(e.target.value)} 
-                        style={{ 
-                          width: 240, 
+                        onChange={(e) => setSearchText(e.target.value)}
+                        style={{
+                          width: 240,
                           borderRadius: '12px',
                           borderColor: '#e2e8f0',
-                          boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
-                        }} 
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+                        }}
                       />
                     </Space>
-                    
+
                     <Space size="middle">
-                      <Button 
+                      <Button
                         onClick={async () => {
                           // 先检查项目连接状态
                           try {
-                            console.log(`刷新按钮点击：检查项目${projectId}连接状态`);
                             const connectionStatus = await checkProjectStatus(projectId);
-                            
+
                             // 更新项目连接状态
-                            setProjects(prevProjects => {
-                              return prevProjects.map(p => {
+                            setProjects((prevProjects) => {
+                              return prevProjects.map((p) => {
                                 if (p.id === Number(projectId)) {
                                   return {
                                     ...p,
-                                    connectionStatus
+                                    connectionStatus,
                                   };
                                 }
                                 return p;
                               });
                             });
-                            
+
                             // 然后刷新程序列表
-                            console.log(`刷新按钮点击：刷新项目${projectId}的程序列表`);
                             await fetchPrograms(projectId);
                           } catch (error) {
                             console.error(`刷新失败:`, error);
                             // 如果是请求被取消的错误，不显示错误信息
-                            if (!error.message?.includes('cancel') && !error.message?.includes('NS_BINDING_ABORTED')) {
+                            if (
+                              !error._handled &&
+                              !error.message?.includes('cancel') &&
+                              !error.message?.includes('NS_BINDING_ABORTED')
+                            ) {
                               message.error('刷新失败');
                             }
                           }
-                        }} 
+                        }}
                         icon={<ReloadOutlined />}
                         style={{
                           borderRadius: '10px',
                           borderColor: '#e2e8f0',
                           color: '#4a5568',
-                          fontWeight: '500'
+                          fontWeight: '500',
                         }}
                       >
                         刷新
                       </Button>
-                      <Button 
-                        onClick={() => handleBatch('start', '启动')} 
+                      <Button
+                        onClick={() => handleBatch('start', '启动')}
                         icon={<PlayCircleOutlined />}
                         style={{
                           borderRadius: '10px',
                           backgroundColor: '#38a169',
                           borderColor: '#38a169',
                           color: '#ffffff',
-                          fontWeight: '500'
+                          fontWeight: '500',
                         }}
                       >
                         全部启动
                       </Button>
-                      <Button 
-                        onClick={() => handleBatch('restart', '重启')} 
+                      <Button
+                        onClick={() => handleBatch('restart', '重启')}
                         icon={<ReloadOutlined />}
                         style={{
                           borderRadius: '10px',
                           backgroundColor: '#fa8c16',
                           borderColor: '#fa8c16',
                           color: '#ffffff',
-                          fontWeight: '500'
+                          fontWeight: '500',
                         }}
-                        disabled={filteredPrograms.length === 0 || filteredPrograms.every(p => p.status === 'STOPPED')}
+                        disabled={
+                          filteredPrograms.length === 0 || filteredPrograms.every((p) => p.status === 'STOPPED')
+                        }
                       >
                         全部重启
                       </Button>
-                      <Button 
-                        danger 
-                        onClick={() => handleBatch('stop', '停止')} 
+                      <Button
+                        danger
+                        onClick={() => handleBatch('stop', '停止')}
                         icon={<PauseCircleOutlined />}
                         style={{
                           borderRadius: '10px',
                           backgroundColor: '#e53e3e',
                           borderColor: '#e53e3e',
                           color: '#ffffff',
-                          fontWeight: '500'
+                          fontWeight: '500',
                         }}
                       >
                         全部停止
+                      </Button>
+                      <Button
+                        onClick={async () => {
+                          try {
+                            const res = await reloadConfig(projectId);
+                            message.success(res.message || '配置已重载');
+                            setTimeout(() => fetchPrograms(projectId), 500);
+                          } catch (e) {
+                            if (!e._handled) message.error('重载失败');
+                          }
+                        }}
+                        icon={<ReloadOutlined />}
+                        style={{
+                          borderRadius: '10px',
+                          backgroundColor: '#718096',
+                          borderColor: '#718096',
+                          color: '#fff',
+                          fontWeight: '500',
+                        }}
+                      >
+                        重载配置
                       </Button>
                     </Space>
                   </div>
                 </Card>
 
                 {/* 程序表格 */}
-                <Card 
-                  bordered={false} 
+                <Card
+                  bordered={false}
                   bodyStyle={{ padding: 0 }}
                   style={{
                     borderRadius: '16px',
                     boxShadow: '0 4px 20px rgba(0,0,0,0.05)',
-                    border: '1px solid #f0f0f0'
+                    border: '1px solid #f0f0f0',
                   }}
                 >
                   <Table
@@ -920,74 +800,87 @@ const ProgramsPage = () => {
                     rowKey="id"
                     loading={loading}
                     pagination={false}
-                    locale={{ 
-                      emptyText: <Empty 
-                        description={<Text style={{ color: '#a0aec0' }}>暂无程序</Text>} 
-                        image={Empty.PRESENTED_IMAGE_SIMPLE} 
-                        imageStyle={{ height: 60 }}
-                      /> 
+                    locale={{
+                      emptyText: (
+                        <Empty
+                          description={<Text style={{ color: '#a0aec0' }}>暂无程序</Text>}
+                          image={Empty.PRESENTED_IMAGE_SIMPLE}
+                          imageStyle={{ height: 60 }}
+                        />
+                      ),
                     }}
                     rowClassName={() => {
                       return 'table-row-hover';
                     }}
                     style={{
                       borderRadius: '16px',
-                      overflow: 'hidden'
+                      overflow: 'hidden',
                     }}
                     tableLayout="fixed"
                     components={{
                       Header: (props) => (
-                        <thead {...props} style={{
-                          backgroundColor: '#f7fafc',
-                          borderBottom: '2px solid #e2e8f0'
-                        }} />
+                        <thead
+                          {...props}
+                          style={{
+                            backgroundColor: '#f7fafc',
+                            borderBottom: '2px solid #e2e8f0',
+                          }}
+                        />
                       ),
                       Body: (props) => (
-                        <tbody {...props} style={{
-                          backgroundColor: '#ffffff'
-                        }} />
-                      )
+                        <tbody
+                          {...props}
+                          style={{
+                            backgroundColor: '#ffffff',
+                          }}
+                        />
+                      ),
                     }}
                   />
                 </Card>
               </>
             ) : (
-              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', flexDirection: 'column' }}>
-                <Empty description="请从左侧选择一个项目进行管理" />
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  height: '100%',
+                  flexDirection: 'column',
+                }}
+              >
+                <Empty description="请从左侧选择一台机器进行管理" />
               </div>
             )}
           </Content>
         </Layout>
       </Layout>
-      
+
       {/* 弹窗组件挂载区 */}
       <UsersPage isOpen={showUsersModal} onClose={() => setShowUsersModal(false)} />
-      
-      <ProgramDetailPage 
-        isOpen={showLogDrawer} 
-        onClose={() => setShowLogDrawer(false)} 
-        programId={selectedProgramId} 
-      />
-      
+      <OperationLogsModal open={showOpLogsModal} onClose={() => setShowOpLogsModal(false)} />
+
+      <ProgramDetailPage isOpen={showLogDrawer} onClose={() => setShowLogDrawer(false)} programId={selectedProgramId} />
+
       {/* 这里你需要自己创建一个 ProjectManageModal 和 ChangePasswordModal 的 Antd 版本 
          或者直接在这里使用 Antd Modal 重写逻辑。
          为了保持代码整洁，建议将原 ProgramsPage 中的 密码/项目管理 逻辑抽离。
       */}
       {showProjectModal && (
-        <ProjectManageModal 
-          open={showProjectModal} 
-          onClose={() => setShowProjectModal(false)}
-          onRefresh={fetchProjects}
+        <ProjectManageModal
+          open={showProjectModal}
+          onClose={() => {
+            setShowProjectModal(false);
+            fetchProjects();
+          }}
+          onRefresh={() => {
+            fetchProjects();
+          }}
           projects={projects}
         />
       )}
 
-      {showPwdModal && (
-        <ChangePasswordModal
-          open={showPwdModal}
-          onClose={() => setShowPwdModal(false)}
-        />
-      )}
+      {showPwdModal && <ChangePasswordModal open={showPwdModal} onClose={() => setShowPwdModal(false)} />}
     </div>
   );
 };

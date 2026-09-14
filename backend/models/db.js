@@ -1,15 +1,34 @@
-// 仅使用MySQL存储的数据库服务
 const { STORAGE_CONFIG } = require('../config');
 
-// 导出MySQL数据库实现
-let dbImplementation;
+let dbImplementation = null;
 
-// 立即连接并设置数据库实现
 async function initializeDatabase() {
+  const storageType = STORAGE_CONFIG.TYPE;
+
+  if (storageType === 'mysql') {
+    return initializeMySQL();
+  }
+
+  // 默认使用 SQLite
+  return initializeSQLite();
+}
+
+async function initializeSQLite() {
   try {
-    console.log('正在初始化MySQL数据库存储...\n');
-    
-    // 连接到MySQL服务器（不指定数据库）
+    const { initSQLiteDatabase } = require('../init-db');
+    await initSQLiteDatabase();
+    dbImplementation = require('./db.sqlite');
+    console.log('SQLite 数据库初始化完成');
+  } catch (error) {
+    console.error('SQLite数据库初始化失败:', error.message);
+    process.exit(1);
+  }
+}
+
+async function initializeMySQL() {
+  try {
+    console.log('正在初始化MySQL数据库存储...');
+
     const mysql = require('mysql2/promise');
     const connection = await mysql.createConnection({
       host: STORAGE_CONFIG.MYSQL.HOST,
@@ -18,38 +37,39 @@ async function initializeDatabase() {
       password: STORAGE_CONFIG.MYSQL.PASSWORD,
       multipleStatements: true
     });
-    
-    // 检查数据库是否存在，如果不存在则创建
+
     await connection.query(`CREATE DATABASE IF NOT EXISTS ${STORAGE_CONFIG.MYSQL.DATABASE} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
-    console.log(`数据库 ${STORAGE_CONFIG.MYSQL.DATABASE} 检查/创建完成\n`);
-    
-    // 选择数据库
     await connection.query(`USE ${STORAGE_CONFIG.MYSQL.DATABASE}`);
-    
-    // 测试连接
     await connection.query('SELECT 1');
     await connection.end();
-    
-    console.log('MySQL数据库连接成功\n');
-    
-    // 设置数据库实现为MySQL
+
+    console.log('MySQL数据库连接成功');
+
     dbImplementation = require('./db.mysql');
-    
   } catch (error) {
-    console.error('MySQL数据库初始化失败:', error.message + '\n');
-    console.error('错误详情:', error.stack + '\n');
-    process.exit(1); // 无法连接MySQL时退出程序
+    console.error('MySQL数据库初始化失败:', error.message);
+    process.exit(1);
   }
 }
 
-// 立即执行初始化
-initializeDatabase();
+// 启动初始化并保存 promise
+const initPromise = initializeDatabase();
 
-// 确保所有方法都支持异步调用
+// Proxy 确保所有 DB 调用等待初始化完成
 module.exports = new Proxy({}, {
   get: function(target, prop) {
     if (!dbImplementation) {
-      throw new Error('数据库实现尚未初始化完成');
+      return async function(...args) {
+        await initPromise;
+        if (!dbImplementation) {
+          throw new Error('数据库实现尚未初始化完成');
+        }
+        const impl = dbImplementation[prop];
+        if (typeof impl === 'function') {
+          return impl.apply(dbImplementation, args);
+        }
+        return impl;
+      };
     }
     return dbImplementation[prop];
   }

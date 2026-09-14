@@ -1,35 +1,57 @@
 const { Server } = require('socket.io');
 const { getProcessStdoutLog, getProcessStderrLog, callRpc } = require('./supervisorService');
+const { CORS_CONFIG } = require('../config');
+const Logger = require('../utils/logger');
+const db = require('../models/db');
+const { parseProgramId } = require('../utils/programId');
+const { authenticateBearerToken } = require('../middleware/auth');
 
 class SocketServer {
   constructor(server) {
     this.io = new Server(server, {
       path: '/socket.io',
       cors: {
-        origin: function(origin, callback) {
-          // 允许本地开发环境的所有请求
-          if (!origin || origin.startsWith('http://localhost:')) {
-            callback(null, true);
-          } else {
-            callback(new Error('Not allowed by CORS'));
-          }
-        },
+        origin: true,
         credentials: true,
         methods: ['GET', 'POST']
+      },
+      allowRequest: (req, callback) => {
+        const origin = req.headers.origin;
+        let isSameOrigin = false;
+        try {
+          isSameOrigin = origin ? new URL(origin).host === req.headers.host : false;
+        } catch {
+          isSameOrigin = false;
+        }
+        callback(null, !origin || isSameOrigin || CORS_CONFIG.ORIGINS.includes(origin));
       },
       transports: ['polling', 'websocket'],
       allowEIO3: true
     });
-    
+
+    // JWT 与服务 API 令牌认证中间件。
+    this.io.use(async (socket, next) => {
+      const token = socket.handshake.auth?.token || socket.handshake.query?.token;
+      if (!token) return next(new Error('Authentication required'));
+      try {
+        const authenticated = await authenticateBearerToken(token);
+        socket.data.user = authenticated.user;
+        socket.data.authType = authenticated.authType;
+        socket.data.apiToken = authenticated.apiToken;
+        next();
+      } catch {
+        next(new Error('Invalid token'));
+      }
+    });
+
     this.connections = new Map();
     this.timers = new Map();
-    
     this.initialize();
   }
-  
+
   initialize() {
     this.io.on('connection', (socket) => {
-      console.log(`Socket connected: ${socket.id}`);
+      Logger.debug(`Socket connected: ${socket.id}`);
       this.connections.set(socket.id, {
         socket: socket,
         programId: null,
@@ -40,8 +62,26 @@ class SocketServer {
         isReducedInterval: false // 是否处于减少轮询间隔的状态
       });
       
-      socket.on('start_log_tail', (data) => {
-        this.startLogTail(socket.id, data.programId, data.logType);
+      socket.on('start_log_tail', async (data = {}) => {
+        try {
+          if (!['stdout', 'stderr'].includes(data.logType)) {
+            throw new Error('无效的日志类型');
+          }
+          if (socket.data.authType === 'api_token' && !socket.data.apiToken.scopes.includes('*') && !socket.data.apiToken.scopes.includes('logs:read')) {
+            throw new Error('API 令牌缺少范围: logs:read');
+          }
+          parseProgramId(data.programId);
+          if (!(await db.checkUserSpecificProgramPermission(socket.data.user.userId, data.programId))) {
+            throw new Error('没有权限访问此程序日志');
+          }
+          this.startLogTail(socket.id, data.programId, data.logType);
+        } catch (error) {
+          socket.emit('log_error', {
+            programId: data.programId,
+            logType: data.logType,
+            error: error.message
+          });
+        }
       });
       
       socket.on('stop_log_tail', () => {
@@ -49,7 +89,7 @@ class SocketServer {
       });
       
       socket.on('disconnect', () => {
-        console.log(`Socket disconnected: ${socket.id}`);
+        Logger.debug(`Socket disconnected: ${socket.id}`);
         this.stopLogTail(socket.id);
         this.connections.delete(socket.id);
       });
@@ -92,7 +132,9 @@ class SocketServer {
   async fetchAndPushLogs(socketId) {
     const connection = this.connections.get(socketId);
     if (!connection || !connection.programId || !connection.logType) return;
-    
+    if (connection._fetching) return; // 防止并发竞态
+    connection._fetching = true;
+
     try {
       let logResult;
       // programId格式为：projectId-programName
@@ -116,7 +158,7 @@ class SocketServer {
             processInfo.stderr_logfile_size || 0;
           connection.offset = logFileSize;
         } catch (error) {
-          console.error(`获取进程信息失败 (${programName}):`, error);
+          Logger.error(`获取进程信息失败 (${programName}):`, error);
           // 如果获取失败，使用-1作为初始偏移量，确保只获取最新日志
           connection.offset = -1;
         }
@@ -176,7 +218,7 @@ class SocketServer {
           }, 10000); // 减少轮询间隔：每10秒获取一次日志
           this.timers.set(socketId, timerId);
           connection.isReducedInterval = true;
-          // console.log(`已减少日志轮询频率: ${connection.programId} (${connection.logType})`);
+          Logger.debug(`已减少日志轮询频率: ${connection.programId} (${connection.logType})`);
         } else if (connection.emptyLogCount < 5) {
           // 仍然发送空日志块，让前端知道没有日志内容
           connection.socket.emit('log_chunk', {
@@ -188,7 +230,7 @@ class SocketServer {
       }
       
     } catch (error) {
-      console.error(`Error fetching logs for ${connection.programId} (${connection.logType}):`, error.message);
+      Logger.error(`Error fetching logs for ${connection.programId} (${connection.logType}):`, error);
       // 如果是NO_FILE错误，不发送错误信息，因为这是正常情况
       if (!error.message.includes('NO_FILE')) {
         connection.socket.emit('log_error', {
@@ -219,6 +261,8 @@ class SocketServer {
           connection.isReducedInterval = true;
         }
       }
+    } finally {
+      connection._fetching = false;
     }
   }
 }
