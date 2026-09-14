@@ -302,3 +302,10 @@ API 契约以 `/api` 为稳定 v1 基线，可通过 `GET /api/version` 查询�
 - **Supervisor** 需开启 XML-RPC：配置 `[inet_http_server]` 段
 - **生产环境**推荐 MySQL + PM2 + HTTPS 反向代理
 - **开发模式**前后端分端口（3000 / 5173），**生产模式**单端口（6002）前后端一体
+
+backend/.env
+SESSION_SECRET=local-dev-session-secret
+JWT_SECRET=local-dev-jwt-secret
+ENCRYPTION_KEY=0123456789abcdef0123456789abcdef
+STORAGE_TYPE=sqlite
+REGISTRATION_ENABLED=true
