@@ -17,6 +17,7 @@ router.use('/', require('./programs'));
 router.use('/', require('./users'));
 router.use('/', require('./groups'));
 router.use('/', require('./apiTokens'));
+router.use('/', require('./operationLogs'));
 
 // API路由前缀处理
 router.use('/api', (req, res, next) => {

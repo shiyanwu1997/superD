@@ -126,6 +126,24 @@ export const getUserInfo = async () => {
   }
 };
 
+// 查询注册功能是否开放（无鉴权，登录页据此显示/隐藏注册入口）
+export const getRegistrationStatus = async () => {
+  const response = await api.get('/registration/status');
+  return response.data;
+};
+
+// 用户注册（提交后需超级管理员审核）
+export const register = async (username, password) => {
+  const response = await api.post('/register', { username, password });
+  return response.data;
+};
+
+// 审核通过注册用户（仅超级管理员）
+export const approveUser = async (userId) => {
+  const response = await api.post(`/users/${userId}/approve`);
+  return response.data;
+};
+
 // 原getProjects函数已移至文件顶部
 
 // 获取项目下的程序列表
@@ -325,5 +343,10 @@ export const addUserProgramPermission = async (userId, programId) => {
 
 export const removeUserProgramPermission = async (userId, programId) => {
   const response = await api.delete(`/users/${userId}/program-permissions/${programId}`);
+  return response.data;
+};
+
+export const getOperationLogs = async (params) => {
+  const response = await api.get('/operation-logs', { params });
   return response.data;
 };

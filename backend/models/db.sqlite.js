@@ -37,13 +37,20 @@ const getUserById = async (userId) => {
   return db.prepare('SELECT * FROM users WHERE id = ?').get(userId) || null;
 };
 
-const createUser = async (username, password, roleId = 2, createdBy = null) => {
+const createUser = async (username, password, roleId = 2, createdBy = null, status = 'active') => {
   const existing = db.prepare('SELECT id FROM users WHERE username = ?').get(username);
   if (existing) return null;
 
-  const stmt = db.prepare('INSERT INTO users (username, password, roleId, createdBy) VALUES (?, ?, ?, ?)');
-  const result = stmt.run(username, password, roleId, createdBy || null);
-  return { id: result.lastInsertRowid, username, password, roleId, createdBy };
+  const stmt = db.prepare('INSERT INTO users (username, password, roleId, createdBy, status) VALUES (?, ?, ?, ?, ?)');
+  const result = stmt.run(username, password, roleId, createdBy || null, status);
+  return { id: result.lastInsertRowid, username, password, roleId, createdBy, status };
+};
+
+const updateUserStatus = async (userId, status) => {
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
+  if (!user) return false;
+  db.prepare('UPDATE users SET status = ? WHERE id = ?').run(status, userId);
+  return true;
 };
 
 const deleteUser = async (userId) => {
@@ -402,6 +409,30 @@ const getApiAuditEvents = async (limit) => {
   `).all(limit);
 };
 
+const addOperationLog = async ({ userId, username, projectId, projectName, programName, action, result = 'success', detail = null }) => {
+  db.prepare(`
+    INSERT INTO operation_logs (userId, username, projectId, projectName, programName, action, result, detail)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(userId, username, projectId ?? null, projectName ?? null, programName ?? null, action, result, detail ?? null);
+};
+
+const getOperationLogs = async ({ page = 1, pageSize = 20, username, projectId, programName, action, from, to } = {}) => {
+  const where = [];
+  const params = [];
+  if (username) { where.push('username = ?'); params.push(username); }
+  if (projectId) { where.push('projectId = ?'); params.push(parseInt(projectId, 10)); }
+  if (programName) { where.push('programName LIKE ?'); params.push(`%${programName}%`); }
+  if (action) { where.push('action = ?'); params.push(action); }
+  if (from) { where.push('createdAt >= ?'); params.push(from); }
+  if (to) { where.push('createdAt <= ?'); params.push(to); }
+  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
+  const total = db.prepare(`SELECT COUNT(*) as count FROM operation_logs ${whereSql}`).get(...params).count;
+  const offset = (page - 1) * pageSize;
+  const logs = db.prepare(`SELECT * FROM operation_logs ${whereSql} ORDER BY id DESC LIMIT ? OFFSET ?`).all(...params, pageSize, offset);
+  return { logs, total };
+};
+
 module.exports = {
   getUserByUsername,
   getUserById,
@@ -415,6 +446,7 @@ module.exports = {
   createUser,
   testConnection,
   deleteUser,
+  updateUserStatus,
   updateUserRole,
   updateUserCreatedBy,
   addUserProjectPermission,
@@ -439,5 +471,7 @@ module.exports = {
   touchApiToken,
   revokeApiToken,
   createApiAuditEvent,
-  getApiAuditEvents
+  getApiAuditEvents,
+  addOperationLog,
+  getOperationLogs
 };

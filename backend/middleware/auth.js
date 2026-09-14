@@ -21,6 +21,7 @@ async function authenticateBearerToken(token) {
 
     const user = await db.getUserById(apiToken.userId);
     if (!user) throw new Error('Invalid API token user');
+    if (user.status === 'pending') throw new Error('User pending approval');
 
     // 更新使用时间不应阻塞正常的 API 调用。
     db.touchApiToken(apiToken.id).catch(error => Logger.error('更新 API 令牌使用时间失败', error));
@@ -34,6 +35,7 @@ async function authenticateBearerToken(token) {
   const decoded = jwt.verify(token, SERVER_CONFIG.JWT_SECRET);
   const user = await db.getUserById(decoded.userId);
   if (!user) throw new Error('Invalid JWT user');
+  if (user.status === 'pending') throw new Error('User pending approval');
   return {
     user: { userId: user.id, username: user.username, roleId: user.roleId },
     authType: 'jwt',

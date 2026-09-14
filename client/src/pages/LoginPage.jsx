@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Button, Input, Card, Typography, Alert, Space } from 'antd';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
+import { getRegistrationStatus } from '../utils/api';
 
 const { Text } = Typography;
 
@@ -10,7 +12,16 @@ const LoginPage = () => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [registerEnabled, setRegisterEnabled] = useState(false);
   const { login } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    // 注册开关由后端配置下发；失败时保守隐藏入口
+    getRegistrationStatus()
+      .then((data) => setRegisterEnabled(!!data.enabled))
+      .catch(() => setRegisterEnabled(false));
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -113,6 +124,13 @@ const LoginPage = () => {
             >
               登录
             </Button>
+            {registerEnabled && (
+              <div style={{ textAlign: 'center', marginTop: 4 }}>
+                <a onClick={() => navigate('/register')} style={{ color: '#64748b', fontSize: 13, cursor: 'pointer' }}>
+                  没有账号？注册账号
+                </a>
+              </div>
+            )}
           </Space>
         </form>
       </Card>

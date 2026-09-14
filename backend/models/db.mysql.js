@@ -380,15 +380,23 @@ async function deleteProject(projectId) {
 }
 
 // 创建新用户
-async function createUser(username, password, roleId = 2, createdBy = null) {
+async function createUser(username, password, roleId = 2, createdBy = null, status = 'active') {
   const [existingRows] = await queryWithLogs('SELECT * FROM users WHERE username = ?', [username]);
   if (existingRows.length > 0) return null;
 
   const [result] = await queryWithLogs(
-    'INSERT INTO users (username, password, roleId, createdBy) VALUES (?, ?, ?, ?)',
-    [username, password, roleId, createdBy || null]
+    'INSERT INTO users (username, password, roleId, createdBy, status) VALUES (?, ?, ?, ?, ?)',
+    [username, password, roleId, createdBy || null, status]
   );
-  return { id: result.insertId, username, password, roleId, createdBy };
+  return { id: result.insertId, username, password, roleId, createdBy, status };
+}
+
+// 更新用户审核状态
+async function updateUserStatus(userId, status) {
+  const [existingRows] = await queryWithLogs('SELECT * FROM users WHERE id = ?', [userId]);
+  if (existingRows.length === 0) return false;
+  await queryWithLogs('UPDATE users SET status = ? WHERE id = ?', [status, userId]);
+  return true;
 }
 
 // 删除用户
@@ -681,6 +689,30 @@ const getApiAuditEvents = async (limit) => {
   return rows;
 };
 
+const addOperationLog = async ({ userId, username, projectId, projectName, programName, action, result = 'success', detail = null }) => {
+  await queryWithLogs(`
+    INSERT INTO operation_logs (userId, username, projectId, projectName, programName, action, result, detail)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `, [userId, username, projectId ?? null, projectName ?? null, programName ?? null, action, result, detail ?? null]);
+};
+
+const getOperationLogs = async ({ page = 1, pageSize = 20, username, projectId, programName, action, from, to } = {}) => {
+  const where = [];
+  const params = [];
+  if (username) { where.push('username = ?'); params.push(username); }
+  if (projectId) { where.push('projectId = ?'); params.push(parseInt(projectId, 10)); }
+  if (programName) { where.push('programName LIKE ?'); params.push(`%${programName}%`); }
+  if (action) { where.push('action = ?'); params.push(action); }
+  if (from) { where.push('createdAt >= ?'); params.push(from); }
+  if (to) { where.push('createdAt <= ?'); params.push(to); }
+  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
+  const [countRows] = await queryWithLogs(`SELECT COUNT(*) as count FROM operation_logs ${whereSql}`, params);
+  const offset = (page - 1) * pageSize;
+  const [logs] = await queryWithLogs(`SELECT * FROM operation_logs ${whereSql} ORDER BY id DESC LIMIT ? OFFSET ?`, [...params, pageSize, offset]);
+  return { logs, total: countRows[0].count };
+};
+
 module.exports = {
   getUserByUsername,
   getUserById,
@@ -694,6 +726,7 @@ module.exports = {
   createUser,
   testConnection,
   deleteUser,
+  updateUserStatus,
   updateUserRole,
   updateUserCreatedBy,
   addUserProjectPermission,
@@ -718,5 +751,7 @@ module.exports = {
   touchApiToken,
   revokeApiToken,
   createApiAuditEvent,
-  getApiAuditEvents
+  getApiAuditEvents,
+  addOperationLog,
+  getOperationLogs
 };

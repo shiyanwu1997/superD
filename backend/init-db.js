@@ -99,6 +99,22 @@ async function initSQLiteDatabase() {
       FOREIGN KEY (userId) REFERENCES users(id) ON DELETE SET NULL
     );
     CREATE INDEX IF NOT EXISTS idx_api_audit_events_created_at ON api_audit_events(createdAt);
+
+    CREATE TABLE IF NOT EXISTS operation_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      userId INTEGER NOT NULL,
+      username TEXT NOT NULL,
+      projectId INTEGER,
+      projectName TEXT,
+      programName TEXT,
+      action TEXT NOT NULL,
+      result TEXT NOT NULL DEFAULT 'success',
+      detail TEXT,
+      createdAt TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_operation_logs_created_at ON operation_logs(createdAt);
+    CREATE INDEX IF NOT EXISTS idx_operation_logs_username ON operation_logs(username);
+    CREATE INDEX IF NOT EXISTS idx_operation_logs_project_id ON operation_logs(projectId);
   `);
 
   // 插入初始角色
@@ -111,6 +127,12 @@ async function initSQLiteDatabase() {
       insertRole.run(3, 'user', '普通用户角色，拥有有限权限');
     });
     transaction();
+  }
+
+  // 迁移: users.status 注册审核状态（存量用户默认 active）
+  const userCols = db.prepare('PRAGMA table_info(users)').all();
+  if (!userCols.find(c => c.name === 'status')) {
+    db.exec("ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'active'");
   }
 
   db.close();
@@ -230,6 +252,24 @@ async function initMySQLDatabase() {
     )
   `);
 
+  await connection.query(`
+    CREATE TABLE IF NOT EXISTS operation_logs (
+      id BIGINT PRIMARY KEY AUTO_INCREMENT,
+      userId INT NOT NULL,
+      username VARCHAR(50) NOT NULL,
+      projectId INT NULL,
+      projectName VARCHAR(100) NULL,
+      programName VARCHAR(255) NULL,
+      action VARCHAR(20) NOT NULL,
+      result VARCHAR(10) NOT NULL DEFAULT 'success',
+      detail TEXT NULL,
+      createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_operation_logs_created_at (createdAt),
+      INDEX idx_operation_logs_username (username),
+      INDEX idx_operation_logs_project_id (projectId)
+    )
+  `);
+
   const [roleCount] = await connection.query('SELECT COUNT(*) AS count FROM roles');
   if (roleCount[0].count === 0) {
     await connection.query(`
@@ -238,6 +278,14 @@ async function initMySQLDatabase() {
       (2, 'subadmin', '普通管理员角色，可以创建普通用户'),
       (3, 'user', '普通用户角色，拥有有限权限')
     `);
+  }
+
+  // 迁移: users.status 注册审核状态（存量用户默认 active）
+  const [statusCols] = await connection.query(
+    "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'status'"
+  );
+  if (statusCols.length === 0) {
+    await connection.query("ALTER TABLE users ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'active'");
   }
 
   await connection.end();

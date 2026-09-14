@@ -113,6 +113,35 @@ router.post('/api/users', authMiddleware.verifyToken, authMiddleware.requireScop
   }
 });
 
+// API: 审核通过注册用户（仅超级管理员）
+router.post('/api/users/:userId/approve', authMiddleware.verifyToken, authMiddleware.requireScope('users:write'), authMiddleware.checkSuperAdmin, async (req, res, next) => {
+  try {
+    const userIdInt = parseInt(req.params.userId);
+    if (isNaN(userIdInt)) {
+      throw new ApiError(400, '无效的用户ID');
+    }
+
+    const targetUser = await db.getUserById(userIdInt);
+    if (!targetUser) {
+      throw new ApiError(404, '用户不存在');
+    }
+    if (targetUser.status !== 'pending') {
+      throw new ApiError(400, '该用户不在待审核状态');
+    }
+
+    const ok = await db.updateUserStatus(userIdInt, 'active');
+    if (!ok) {
+      throw new ApiError(500, '审核操作失败');
+    }
+    res.json({ success: true, message: '审核通过' });
+  } catch (error) {
+    if (!(error instanceof ApiError)) {
+      error = new ApiError(500, '审核操作失败', error.message);
+    }
+    next(error);
+  }
+});
+
 // API: 删除用户（仅管理员）
 router.delete('/api/users/:userId', authMiddleware.verifyToken, authMiddleware.requireScope('users:write'), authMiddleware.checkAdmin, async (req, res, next) => {
   try {

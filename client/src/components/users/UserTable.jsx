@@ -1,8 +1,18 @@
 import React, { useState } from 'react';
-import { Table, Tag, Space, Button, Popconfirm, Select, Tooltip, Avatar, message, Modal, Spin } from 'antd';
-import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
+import { Table, Tag, Space, Button, Popconfirm, Select, Tooltip, Avatar, Badge, message, Modal, Spin } from 'antd';
+import { DeleteOutlined, PlusOutlined, CheckOutlined } from '@ant-design/icons';
 import { useAuth } from '../../contexts/AuthContext';
-import { setUserProjectPermission, removeUserProjectPermission, addUserProgramPermission, removeUserProgramPermission, getUserProgramPermissions, getProgramsByProject, deleteUser, updateUserCreatedBy } from '../../utils/api';
+import {
+  setUserProjectPermission,
+  removeUserProjectPermission,
+  addUserProgramPermission,
+  removeUserProgramPermission,
+  getUserProgramPermissions,
+  getProgramsByProject,
+  deleteUser,
+  updateUserCreatedBy,
+  approveUser,
+} from '../../utils/api';
 
 const UserTable = ({ users, projects, loading, onRoleChange, onUserUpdate, allUsers = [] }) => {
   const { user } = useAuth();
@@ -32,7 +42,9 @@ const UserTable = ({ users, projects, loading, onRoleChange, onUserUpdate, allUs
     try {
       const perms = await getUserProgramPermissions(record.id);
       setProgramModalPerms(perms || []);
-    } catch { setProgramModalPerms([]); }
+    } catch {
+      setProgramModalPerms([]);
+    }
     setProgramModalLoading(false);
   };
 
@@ -40,12 +52,17 @@ const UserTable = ({ users, projects, loading, onRoleChange, onUserUpdate, allUs
   const handleMachineChange = async (pid) => {
     setSelectedMachine(pid);
     setSelectedPrograms([]);
-    if (!pid) { setMachinePrograms([]); return; }
+    if (!pid) {
+      setMachinePrograms([]);
+      return;
+    }
     setLoadingPrograms(true);
     try {
       const progs = await getProgramsByProject(pid);
       setMachinePrograms(progs || []);
-    } catch { setMachinePrograms([]); }
+    } catch {
+      setMachinePrograms([]);
+    }
     setLoadingPrograms(false);
   };
 
@@ -55,7 +72,9 @@ const UserTable = ({ users, projects, loading, onRoleChange, onUserUpdate, allUs
     for (const name of selectedPrograms) {
       try {
         await addUserProgramPermission(programModalUser.id, `${selectedMachine}-${name}`);
-      } catch { /* continue */ }
+      } catch {
+        /* continue */
+      }
     }
     const perms = await getUserProgramPermissions(programModalUser.id);
     setProgramModalPerms(perms || []);
@@ -86,9 +105,22 @@ const UserTable = ({ users, projects, loading, onRoleChange, onUserUpdate, allUs
     }
   };
 
+  // 审核通过注册用户（仅超级管理员）
+  const handleApprove = async (userId) => {
+    try {
+      await approveUser(userId);
+      message.success('审核已通过');
+      if (onUserUpdate) onUserUpdate();
+    } catch (err) {
+      message.error(err.response?.data?.message || '审核操作失败');
+    }
+  };
+
   const columns = [
     {
-      title: '用户', key: 'user', width: 200,
+      title: '用户',
+      key: 'user',
+      width: 200,
       render: (_, record) => (
         <Space>
           <Avatar style={{ backgroundColor: getAvatarColor(record.username) }} size="small">
@@ -97,17 +129,23 @@ const UserTable = ({ users, projects, loading, onRoleChange, onUserUpdate, allUs
           <span>{record.username}</span>
           {Number(record.roleId) === 1 && <Tag color="red">admin</Tag>}
         </Space>
-      )
+      ),
     },
     {
-      title: '角色', dataIndex: 'roleId', key: 'role', width: 120,
+      title: '角色',
+      dataIndex: 'roleId',
+      key: 'role',
+      width: 120,
       render: (roleId, record) => {
         const isAdmin = Number(user?.roleId) === 1;
         const isSelf = Number(user?.id) === Number(record.id);
         const labels = { 1: '超级管理员', 2: '普通管理员', 3: '普通用户' };
         if (!isAdmin || isSelf || record.username === 'admin') return <Tag>{labels[roleId] || roleId}</Tag>;
         return (
-          <Select size="small" value={Number(roleId)} style={{ width: 110 }}
+          <Select
+            size="small"
+            value={Number(roleId)}
+            style={{ width: 110 }}
             onChange={(val) => onRoleChange(record.id, val)}
             options={[
               { label: '普通管理员', value: 2 },
@@ -115,57 +153,80 @@ const UserTable = ({ users, projects, loading, onRoleChange, onUserUpdate, allUs
             ]}
           />
         );
-      }
+      },
     },
     {
-      title: '机器权限', key: 'machines', width: 320,
+      title: '状态',
+      key: 'status',
+      width: 90,
+      render: (_, record) =>
+        record.status === 'pending' ? <Badge status="warning" text="待审核" /> : <Badge status="success" text="正常" />,
+    },
+    {
+      title: '机器权限',
+      key: 'machines',
+      width: 320,
       render: (_, record) => {
-        const userProjects = record.projectPermissions?.map(p => p.projectId) || [];
+        const userProjects = record.projectPermissions?.map((p) => p.projectId) || [];
         const hasAll = Number(record.roleId) === 1;
         const isAdmin = Number(user?.roleId) === 1 || Number(user?.roleId) === 2;
         if (hasAll) return <Tag color="default">全部机器</Tag>;
 
-        const assigned = projects.filter(p => userProjects.includes(p.id));
-        const unassigned = projects.filter(p => !userProjects.includes(p.id));
+        const assigned = projects.filter((p) => userProjects.includes(p.id));
+        const unassigned = projects.filter((p) => !userProjects.includes(p.id));
 
         return (
           <div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 2, marginBottom: 4 }}>
               {assigned.length === 0 && <Tag color="default">无</Tag>}
-              {assigned.map(p => (
-                <Tag key={p.id} color="green" closable={isAdmin}
+              {assigned.map((p) => (
+                <Tag
+                  key={p.id}
+                  color="green"
+                  closable={isAdmin}
                   onClose={() => handlePermissionToggle(record.id, p.id, false)}
-                >{p.name}</Tag>
+                >
+                  {p.name}
+                </Tag>
               ))}
               {assigned.length > 0 && <span style={{ fontSize: 11, color: '#999' }}>({assigned.length}台)</span>}
             </div>
             {isAdmin && unassigned.length > 0 && (
-              <Select size="small" placeholder="+ 添加机器" style={{ width: '100%' }}
+              <Select
+                size="small"
+                placeholder="+ 添加机器"
+                style={{ width: '100%' }}
                 value={undefined}
-                onChange={(val) => { if (val) handlePermissionToggle(record.id, val, true); }}
-                options={unassigned.map(p => ({ label: p.name, value: p.id }))}
+                onChange={(val) => {
+                  if (val) handlePermissionToggle(record.id, val, true);
+                }}
+                options={unassigned.map((p) => ({ label: p.name, value: p.id }))}
               />
             )}
             {isAdmin && !hasAll && (
               <div style={{ marginTop: 6 }}>
-                <Button size="small" style={{ borderRadius: 6, fontSize: 12 }}
-                  onClick={() => openProgramModal(record)}
-                >🔒 程序权限</Button>
+                <Button size="small" style={{ borderRadius: 6, fontSize: 12 }} onClick={() => openProgramModal(record)}>
+                  🔒 程序权限
+                </Button>
               </div>
             )}
           </div>
         );
-      }
+      },
     },
     {
-      title: '上级', key: 'creator', width: 130,
+      title: '上级',
+      key: 'creator',
+      width: 130,
       render: (_, record) => {
         if (Number(record.roleId) === 1) return <Tag color="red">-</Tag>;
         const isSuperAdmin = Number(user?.roleId) === 1;
-        const parentAdmins = allUsers.filter(u => Number(u.roleId) === 1 || Number(u.roleId) === 2);
+        const parentAdmins = allUsers.filter((u) => Number(u.roleId) === 1 || Number(u.roleId) === 2);
         if (isSuperAdmin) {
           return (
-            <Select size="small" style={{ width: 110 }}
+            <Select
+              size="small"
+              style={{ width: 110 }}
               value={record.createdBy || undefined}
               placeholder="选择上级"
               allowClear
@@ -174,36 +235,61 @@ const UserTable = ({ users, projects, loading, onRoleChange, onUserUpdate, allUs
                   await updateUserCreatedBy(record.id, val || null);
                   message.success('已更新');
                   if (onUserUpdate) onUserUpdate();
-                } catch { message.error('更新失败'); }
+                } catch {
+                  message.error('更新失败');
+                }
               }}
-              options={parentAdmins.map(u => ({ label: u.username, value: u.id }))}
+              options={parentAdmins.map((u) => ({ label: u.username, value: u.id }))}
             />
           );
         }
         return <span>{record.createdByUsername || '-'}</span>;
-      }
+      },
     },
     {
-      title: '操作', key: 'action', width: 100,
+      title: '操作',
+      key: 'action',
+      width: 130,
       render: (_, record) => {
         if (record.username === 'admin') return null;
+        const isSuperAdmin = Number(user?.roleId) === 1;
+        const isPending = record.status === 'pending';
         return (
-          <Popconfirm title="确定删除此用户？" onConfirm={async () => {
-            await deleteUser(record.id);
-            message.success('已删除');
-            if (onUserUpdate) onUserUpdate();
-          }}>
-            <Button type="link" danger icon={<DeleteOutlined />} size="small" />
-          </Popconfirm>
+          <Space>
+            {isPending && isSuperAdmin && (
+              <Button type="link" size="small" icon={<CheckOutlined />} onClick={() => handleApprove(record.id)}>
+                通过
+              </Button>
+            )}
+            <Popconfirm
+              title={isPending ? '拒绝该注册申请（删除此用户记录）？' : '确定删除此用户？'}
+              onConfirm={async () => {
+                await deleteUser(record.id);
+                message.success(isPending ? '已拒绝' : '已删除');
+                if (onUserUpdate) onUserUpdate();
+              }}
+            >
+              <Tooltip title={isPending ? '拒绝' : '删除'}>
+                <Button type="link" danger icon={<DeleteOutlined />} size="small" />
+              </Tooltip>
+            </Popconfirm>
+          </Space>
         );
-      }
-    }
+      },
+    },
   ];
 
   return (
     <>
-      <Table dataSource={users} columns={columns} rowKey="id" loading={loading}
-        pagination={false} size="small" scroll={{ x: 1000 }} />
+      <Table
+        dataSource={users}
+        columns={columns}
+        rowKey="id"
+        loading={loading}
+        pagination={false}
+        size="small"
+        scroll={{ x: 1000 }}
+      />
 
       {/* 程序权限弹窗 */}
       <Modal
@@ -214,16 +300,22 @@ const UserTable = ({ users, projects, loading, onRoleChange, onUserUpdate, allUs
         width={600}
         bodyStyle={{ maxHeight: '70vh', overflowY: 'auto' }}
       >
-        {programModalLoading ? <Spin /> : (
+        {programModalLoading ? (
+          <Spin />
+        ) : (
           <>
             <div style={{ marginBottom: 16 }}>
-              <div style={{ fontWeight: 500, marginBottom: 8, color: '#374151' }}>已授权 {programModalPerms.length} 个程序</div>
-              {programModalPerms.length === 0 ? <div style={{ color: '#9ca3af', fontSize: 13 }}>暂无授权</div> : (
+              <div style={{ fontWeight: 500, marginBottom: 8, color: '#374151' }}>
+                已授权 {programModalPerms.length} 个程序
+              </div>
+              {programModalPerms.length === 0 ? (
+                <div style={{ color: '#9ca3af', fontSize: 13 }}>暂无授权</div>
+              ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   {/* 按机器分组 */}
                   {(() => {
                     const grouped = {};
-                    programModalPerms.forEach(p => {
+                    programModalPerms.forEach((p) => {
                       const idx = p.programId.indexOf('-');
                       const mid = p.programId.substring(0, idx);
                       const pname = p.programId.substring(idx + 1);
@@ -231,17 +323,22 @@ const UserTable = ({ users, projects, loading, onRoleChange, onUserUpdate, allUs
                       grouped[mid].push(pname);
                     });
                     return Object.entries(grouped).map(([mid, names]) => {
-                      const machine = projects.find(p => String(p.id) === mid);
+                      const machine = projects.find((p) => String(p.id) === mid);
                       return (
                         <div key={mid}>
                           <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4, fontWeight: 500 }}>
                             {machine?.name || `机器 ${mid}`}
                           </div>
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                            {names.map(name => (
-                              <Tag key={mid + '-' + name} color="default" closable
+                            {names.map((name) => (
+                              <Tag
+                                key={mid + '-' + name}
+                                color="default"
+                                closable
                                 onClose={() => handleRemoveProgram(mid + '-' + name)}
-                              >{name}</Tag>
+                              >
+                                {name}
+                              </Tag>
                             ))}
                           </div>
                         </div>
@@ -255,29 +352,37 @@ const UserTable = ({ users, projects, loading, onRoleChange, onUserUpdate, allUs
             <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: 16 }}>
               <div style={{ fontWeight: 500, marginBottom: 8 }}>新增程序权限：</div>
               <Space>
-                <Select style={{ width: 180 }} placeholder="1. 选择机器"
+                <Select
+                  style={{ width: 180 }}
+                  placeholder="1. 选择机器"
                   value={selectedMachine}
                   onChange={handleMachineChange}
                   allowClear
-                  options={projects.map(p => ({ label: p.name, value: p.id }))}
+                  options={projects.map((p) => ({ label: p.name, value: p.id }))}
                 />
-                <Select style={{ width: 220 }} placeholder="2. 选择程序（可多选）"
+                <Select
+                  style={{ width: 220 }}
+                  placeholder="2. 选择程序（可多选）"
                   mode="multiple"
                   value={selectedPrograms}
                   onChange={setSelectedPrograms}
                   loading={loadingPrograms}
                   disabled={!selectedMachine}
                   options={machinePrograms
-                    .filter(p => !programModalPerms.some(perm => perm.programId === `${selectedMachine}-${p.name}`))
-                    .map(p => ({ label: p.name, value: p.name }))}
+                    .filter((p) => !programModalPerms.some((perm) => perm.programId === `${selectedMachine}-${p.name}`))
+                    .map((p) => ({ label: p.name, value: p.name }))}
                   showSearch
                   filterOption={(input, option) => (option?.label || '').toLowerCase().includes(input.toLowerCase())}
                   notFoundContent={selectedMachine ? '无程序' : '请先选机器'}
                 />
-                <Button type="primary" icon={<PlusOutlined />}
+                <Button
+                  type="primary"
+                  icon={<PlusOutlined />}
                   disabled={!selectedMachine || selectedPrograms.length === 0}
                   onClick={handleAddPrograms}
-                >添加</Button>
+                >
+                  添加
+                </Button>
               </Space>
             </div>
           </>

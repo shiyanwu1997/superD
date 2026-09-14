@@ -6,6 +6,7 @@ const SERVER_CONFIG = {
   HOST: process.env.HOST || 'localhost', // 服务器主机
   SESSION_SECRET: process.env.SESSION_SECRET, // Session密钥（必须通过环境变量设置）
   JWT_SECRET: process.env.JWT_SECRET, // JWT密钥（必须通过环境变量设置）
+  REGISTRATION_ENABLED: process.env.REGISTRATION_ENABLED === 'true', // 是否开放用户注册（前端入口+注册接口总开关）
 };
 
 // 存储配置 - 默认使用SQLite，可选MySQL

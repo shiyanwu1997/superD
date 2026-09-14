@@ -7,6 +7,32 @@ const { ApiError } = require('../utils/errors');
 const { parseProgramId } = require('../utils/programId');
 const Logger = require('../utils/logger');
 
+// 操作审计：fire-and-forget 写入，任何失败都不影响业务响应；403 权限拦截不算操作不记录
+function recordOperationLog(req, { projectId, projectName, programName, action, result, detail }) {
+  try {
+    const userId = req.session?.user?.id || req.user?.userId;
+    if (!userId) return;
+    const username = req.session?.user?.username || req.user?.username || '';
+    const resolveProjectName = projectId == null
+      ? Promise.resolve(null)
+      : Promise.resolve(typeof db.getProjectById === 'function' ? db.getProjectById(projectId) : null)
+          .then(project => (project && project.name) || null)
+          .catch(() => null);
+    resolveProjectName
+      .then(name => db.addOperationLog({
+        userId,
+        username,
+        projectId: projectId ?? null,
+        projectName: projectName ?? name,
+        programName: programName ?? null,
+        action,
+        result: result || 'success',
+        detail: detail || null
+      }))
+      .catch(() => {});
+  } catch { /* 审计失败不影响业务 */ }
+}
+
 // 格式化运行时长
 function formatUptime(seconds) {
   if (!seconds || seconds < 0) return '-';
@@ -254,8 +280,12 @@ router.post('/api/projects/:projectId/programs/start-all', authMiddleware.verify
     }
 
     const result = await supervisorService.startAllProcesses(projectIdInt);
+    recordOperationLog(req, { projectId: projectIdInt, programName: '(机器全部)', action: 'start', result: !result || result.success !== false ? 'success' : 'error', detail: (result && result.message) || null });
     res.json(result);
   } catch (error) {
+    if (!(error instanceof ApiError && error.statusCode === 403)) {
+      recordOperationLog(req, { projectId: parseInt(req.params.projectId, 10), programName: '(机器全部)', action: 'start', result: 'error', detail: error.message });
+    }
     if (!(error instanceof ApiError)) {
       error = new ApiError(500, '启动所有程序失败', error.message);
     }
@@ -275,8 +305,12 @@ router.post('/api/projects/:projectId/programs/stop-all', authMiddleware.verifyT
     }
 
     const result = await supervisorService.stopAllProcesses(projectIdInt);
+    recordOperationLog(req, { projectId: projectIdInt, programName: '(机器全部)', action: 'stop', result: !result || result.success !== false ? 'success' : 'error', detail: (result && result.message) || null });
     res.json(result);
   } catch (error) {
+    if (!(error instanceof ApiError && error.statusCode === 403)) {
+      recordOperationLog(req, { projectId: parseInt(req.params.projectId, 10), programName: '(机器全部)', action: 'stop', result: 'error', detail: error.message });
+    }
     if (!(error instanceof ApiError)) {
       error = new ApiError(500, '停止所有程序失败', error.message);
     }
@@ -296,8 +330,12 @@ router.post('/api/projects/:projectId/programs/restart-all', authMiddleware.veri
     }
 
     const result = await supervisorService.restartAllProcesses(projectIdInt);
+    recordOperationLog(req, { projectId: projectIdInt, programName: '(机器全部)', action: 'restart', result: !result || result.success !== false ? 'success' : 'error', detail: (result && result.message) || null });
     res.json(result);
   } catch (error) {
+    if (!(error instanceof ApiError && error.statusCode === 403)) {
+      recordOperationLog(req, { projectId: parseInt(req.params.projectId, 10), programName: '(机器全部)', action: 'restart', result: 'error', detail: error.message });
+    }
     if (!(error instanceof ApiError)) {
       error = new ApiError(500, '重启所有程序失败', error.message);
     }
@@ -314,8 +352,12 @@ router.post('/api/projects/:projectId/reload', authMiddleware.verifyToken, authM
       throw new ApiError(403, '没有权限');
     }
     const result = await supervisorService.reloadConfig(parseInt(projectId));
+    recordOperationLog(req, { projectId: parseInt(projectId, 10), programName: '(机器全部)', action: 'reload', result: !result || result.success !== false ? 'success' : 'error', detail: (result && result.message) || null });
     res.json(result);
   } catch (error) {
+    if (!(error instanceof ApiError && error.statusCode === 403)) {
+      recordOperationLog(req, { projectId: parseInt(req.params.projectId, 10), programName: '(机器全部)', action: 'reload', result: 'error', detail: error.message });
+    }
     if (!(error instanceof ApiError)) error = new ApiError(500, '重载失败', error.message);
     next(error);
   }
@@ -334,6 +376,7 @@ router.post('/api/programs/:programId/start', authMiddleware.verifyToken, authMi
     }
 
     const result = await supervisorService.startProcess(projectId, programName);
+    recordOperationLog(req, { projectId, programName, action: 'start', result: result.success ? 'success' : 'error', detail: result.success ? null : result.message });
 
     if (result.success) {
       res.json({ success: true, message: `程序 ${programName} 已成功启动` });
@@ -341,6 +384,11 @@ router.post('/api/programs/:programId/start', authMiddleware.verifyToken, authMi
       res.json({ success: false, message: `启动程序 ${programName} 失败: ${result.message}` });
     }
   } catch (error) {
+    if (!(error instanceof ApiError && error.statusCode === 403)) {
+      let parsed = {};
+      try { parsed = parseProgramId(req.params.programId); } catch { parsed = {}; }
+      recordOperationLog(req, { projectId: parsed.projectId, programName: parsed.programName, action: 'start', result: 'error', detail: error.message });
+    }
     if (!(error instanceof ApiError)) {
       error = new ApiError(500, '启动程序失败', error.message);
     }
@@ -361,12 +409,18 @@ router.post('/api/programs/:programId/stop', authMiddleware.verifyToken, authMid
     }
 
     const result = await supervisorService.stopProcess(projectId, programName);
+    recordOperationLog(req, { projectId, programName, action: 'stop', result: result.success ? 'success' : 'error', detail: result.success ? null : result.message });
     if (result.success) {
       res.json({ success: true, message: `程序 ${programName} 已成功停止` });
     } else {
       res.json({ success: false, message: `停止程序 ${programName} 失败: ${result.message}` });
     }
   } catch (error) {
+    if (!(error instanceof ApiError && error.statusCode === 403)) {
+      let parsed = {};
+      try { parsed = parseProgramId(req.params.programId); } catch { parsed = {}; }
+      recordOperationLog(req, { projectId: parsed.projectId, programName: parsed.programName, action: 'stop', result: 'error', detail: error.message });
+    }
     if (!(error instanceof ApiError)) {
       error = new ApiError(500, '停止程序失败', error.message);
     }
@@ -387,12 +441,18 @@ router.post('/api/programs/:programId/restart', authMiddleware.verifyToken, auth
     }
 
     const result = await supervisorService.restartProcess(projectId, programName);
+    recordOperationLog(req, { projectId, programName, action: 'restart', result: result.success ? 'success' : 'error', detail: result.success ? null : result.message });
     if (result.success) {
       res.json({ success: true, message: `程序 ${programName} 已成功重启` });
     } else {
       res.json({ success: false, message: `重启程序 ${programName} 失败: ${result.message}` });
     }
   } catch (error) {
+    if (!(error instanceof ApiError && error.statusCode === 403)) {
+      let parsed = {};
+      try { parsed = parseProgramId(req.params.programId); } catch { parsed = {}; }
+      recordOperationLog(req, { projectId: parsed.projectId, programName: parsed.programName, action: 'restart', result: 'error', detail: error.message });
+    }
     if (error instanceof ApiError) return next(error);
     next(new ApiError(500, '重启程序失败', error.message));
   }
@@ -432,6 +492,13 @@ router.post('/api/programs/batch-restart', authMiddleware.verifyToken, authMiddl
         }
         try {
           const result = await supervisorService.restartProcess(check.projectId, check.programName);
+          recordOperationLog(req, {
+            projectId: check.projectId,
+            programName: check.programName,
+            action: 'restart',
+            result: result.success ? 'success' : 'error',
+            detail: result.success ? null : result.message
+          });
           return {
             programId: check.programId,
             programName: check.programName,
@@ -439,6 +506,13 @@ router.post('/api/programs/batch-restart', authMiddleware.verifyToken, authMiddl
             message: result.success ? `程序 ${check.programName} 已成功重启` : result.message,
           };
         } catch (error) {
+          recordOperationLog(req, {
+            projectId: check.projectId,
+            programName: check.programName,
+            action: 'restart',
+            result: 'error',
+            detail: error.message
+          });
           return {
             programId: check.programId,
             programName: check.programName,

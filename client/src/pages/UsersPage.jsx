@@ -1,6 +1,33 @@
 import React, { useState, useMemo } from 'react';
-import { Modal, Button, Select, Tag, Space, message, Popconfirm, Divider, Input, Card, Row, Col, Typography } from 'antd';
-import { UserAddOutlined, DeleteOutlined, KeyOutlined, FilterOutlined, DownOutlined, UpOutlined, SearchOutlined, UserOutlined, TeamOutlined, LoadingOutlined, ClusterOutlined } from '@ant-design/icons';
+import {
+  Modal,
+  Button,
+  Select,
+  Tag,
+  Space,
+  message,
+  Popconfirm,
+  Divider,
+  Input,
+  Card,
+  Row,
+  Col,
+  Typography,
+  Segmented,
+} from 'antd';
+import {
+  UserAddOutlined,
+  DeleteOutlined,
+  KeyOutlined,
+  FilterOutlined,
+  DownOutlined,
+  UpOutlined,
+  SearchOutlined,
+  UserOutlined,
+  TeamOutlined,
+  LoadingOutlined,
+  ClusterOutlined,
+} from '@ant-design/icons';
 import { getAllUsers, deleteUser, getProjects, updateUserPassword, updateUserRole } from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useQuery } from '@tanstack/react-query';
@@ -10,9 +37,10 @@ import UserFormDrawer from '../components/users/UserFormDrawer';
 const { Title, Text } = Typography;
 const UsersPage = ({ isOpen, onClose }) => {
   const { user } = useAuth();
-  
+
   // State management
   const [roleFilter, setRoleFilter] = useState(null); // null表示显示所有角色
+  const [statusFilter, setStatusFilter] = useState('all'); // all | pending 注册审核状态过滤
   const [expandedAdmins, setExpandedAdmins] = useState(new Set()); // 用于跟踪展开的管理员
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [editUser, setEditUser] = useState(null);
@@ -20,16 +48,20 @@ const UsersPage = ({ isOpen, onClose }) => {
   const [searchText, setSearchText] = useState('');
 
   // React Query for data fetching
-  const { data: users = [], isLoading: usersLoading, refetch: refetchUsers } = useQuery({
+  const {
+    data: users = [],
+    isLoading: usersLoading,
+    refetch: refetchUsers,
+  } = useQuery({
     queryKey: ['users'],
     queryFn: getAllUsers,
-    enabled: isOpen !== undefined ? isOpen : true
+    enabled: isOpen !== undefined ? isOpen : true,
   });
 
   const { data: projects = [] } = useQuery({
     queryKey: ['projects'],
     queryFn: getProjects,
-    enabled: isOpen !== undefined ? isOpen : true
+    enabled: isOpen !== undefined ? isOpen : true,
   });
 
   // 切换管理员的展开/收起状态
@@ -43,224 +75,236 @@ const UsersPage = ({ isOpen, onClose }) => {
     setExpandedAdmins(newExpanded);
   };
 
-  // 按角色过滤用户
-  const filteredUsers = users.filter(u => {
+  // 按状态/角色过滤用户
+  const pendingCount = users.filter((u) => u.status === 'pending').length;
+  const filteredUsers = users.filter((u) => {
+    if (statusFilter === 'pending' && u.status !== 'pending') return false;
     if (!roleFilter) return true;
     return Number(u.roleId) === Number(roleFilter);
   });
 
   // 搜索过滤
-  const searchFilteredUsers = filteredUsers.filter(u => {
+  const searchFilteredUsers = filteredUsers.filter((u) => {
     if (!searchText) return true;
     const searchLower = searchText.toLowerCase();
     // 搜索用户名或上级管理员用户名
-    return u.username.toLowerCase().includes(searchLower) || 
-           (u.createdByUsername && u.createdByUsername.toLowerCase().includes(searchLower));
+    return (
+      u.username.toLowerCase().includes(searchLower) ||
+      (u.createdByUsername && u.createdByUsername.toLowerCase().includes(searchLower))
+    );
   });
 
   // 将adminUsersMap提升到组件作用域，以便在第798行使用
   const adminUsersMap = useMemo(() => {
     // 按管理员分组用户（仅超级管理员可见）
     const adminUsersMap = new Map();
-    
+
     // 分离普通用户（roleId=3）
-    const normalUsers = users.filter(u => Number(u.roleId) === 3);
-    
+    const normalUsers = users.filter((u) => Number(u.roleId) === 3);
+
     // 为每个普通管理员（roleId=2）添加其下的用户
-    const subAdmins = users.filter(u => Number(u.roleId) === 2);
-    
-    subAdmins.forEach(admin => {
-      const adminUsers = normalUsers.filter(user => user.createdBy === admin.id);
+    const subAdmins = users.filter((u) => Number(u.roleId) === 2);
+
+    subAdmins.forEach((admin) => {
+      const adminUsers = normalUsers.filter((user) => user.createdBy === admin.id);
       adminUsersMap.set(admin, adminUsers);
     });
-    
+
     // 处理没有分配管理员的用户或由超级管理员创建的用户
-    const unassignedUsers = normalUsers.filter(user => !user.createdBy);
+    const unassignedUsers = normalUsers.filter((user) => !user.createdBy);
     if (unassignedUsers.length > 0) {
       adminUsersMap.set({ id: 'unassigned', username: '未分配管理员', roleId: 0 }, unassignedUsers);
     }
-    
+
     return adminUsersMap;
   }, [users]);
 
   // 渲染管理员及其用户的分组视图
   const renderAdminUserGroups = () => {
     if (user?.roleId !== 1) return null; // 仅超级管理员可见
-    
 
-    
     return Array.from(adminUsersMap.entries()).map(([admin, adminUsers]) => (
       <div key={admin.id} style={{ marginBottom: 16 }}>
-        <Card 
-          variant="outlined" 
-          style={{ 
-            boxShadow: '0 2px 8px rgba(0,0,0,.08)', 
+        <Card
+          variant="outlined"
+          style={{
+            boxShadow: '0 2px 8px rgba(0,0,0,.08)',
             borderRadius: 12,
-            transition: 'all 0.3s ease'
+            transition: 'all 0.3s ease',
           }}
           styles={{ body: { padding: 20 } }}
           hoverable
         >
-          <div 
-            style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
               justifyContent: 'space-between',
               cursor: 'pointer',
               borderRadius: 8,
               padding: '8px',
-              transition: 'background-color 0.3s'
+              transition: 'background-color 0.3s',
             }}
             onClick={() => toggleAdminExpand(admin.id)}
-            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f0f7ff'}
-            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f0f7ff')}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-              <div style={{ 
-                width: 50, 
-                height: 50, 
-                borderRadius: '50%', 
-                backgroundColor: '#f4f4f5', 
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'center',
-                boxShadow: '0 2px 8px rgba(24, 144, 255, 0.2)'
-              }}>
-                {expandedAdmins.has(admin.id) ? 
-                  <UpOutlined style={{ color: '#111', fontSize: 20 }} /> : 
+              <div
+                style={{
+                  width: 50,
+                  height: 50,
+                  borderRadius: '50%',
+                  backgroundColor: '#f4f4f5',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 2px 8px rgba(24, 144, 255, 0.2)',
+                }}
+              >
+                {expandedAdmins.has(admin.id) ? (
+                  <UpOutlined style={{ color: '#111', fontSize: 20 }} />
+                ) : (
                   <DownOutlined style={{ color: '#111', fontSize: 20 }} />
-                }
+                )}
               </div>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <Tag 
-                    color={Number(admin.roleId) === 1 ? 'blue' : Number(admin.roleId) === 2 ? 'green' : 'default'} 
-                    style={{ 
-                      borderRadius: 8, 
-                      fontWeight: 600, 
+                  <Tag
+                    color={Number(admin.roleId) === 1 ? 'blue' : Number(admin.roleId) === 2 ? 'green' : 'default'}
+                    style={{
+                      borderRadius: 8,
+                      fontWeight: 600,
                       padding: '4px 12px',
-                      fontSize: 13
+                      fontSize: 13,
                     }}
                   >
                     {Number(admin.roleId) === 1 ? '超级管理员' : Number(admin.roleId) === 2 ? '普通管理员' : '未分配'}
                   </Tag>
                   <span style={{ fontWeight: 600, fontSize: 16 }}>{admin.username}</span>
                 </div>
-                <Text type="secondary" style={{ fontSize: 14 }}>{adminUsers.length} 个用户</Text>
+                <Text type="secondary" style={{ fontSize: 14 }}>
+                  {adminUsers.length} 个用户
+                </Text>
               </div>
             </div>
-            <Button 
-                    type="primary" 
-                    size="middle" 
-                    icon={<UserAddOutlined />} 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedAdminId(admin.id);
-                      setEditUser(null);
-                      setIsDrawerOpen(true);
-                    }}
-                    style={{ 
-                      borderRadius: 8, 
-                      padding: '6px 20px',
-                      boxShadow: '0 2px 6px rgba(24, 144, 255, 0.2)',
-                      transition: 'all 0.3s ease'
-                    }}
-                  >
-                    新增用户
-                  </Button>
+            <Button
+              type="primary"
+              size="middle"
+              icon={<UserAddOutlined />}
+              onClick={(e) => {
+                e.stopPropagation();
+                setSelectedAdminId(admin.id);
+                setEditUser(null);
+                setIsDrawerOpen(true);
+              }}
+              style={{
+                borderRadius: 8,
+                padding: '6px 20px',
+                boxShadow: '0 2px 6px rgba(24, 144, 255, 0.2)',
+                transition: 'all 0.3s ease',
+              }}
+            >
+              新增用户
+            </Button>
           </div>
-          
+
           {adminUsers.length > 0 && (
-            <div 
-              style={{ 
-                marginLeft: 66, 
-                marginTop: 20, 
-                paddingTop: 20, 
+            <div
+              style={{
+                marginLeft: 66,
+                marginTop: 20,
+                paddingTop: 20,
                 borderTop: '2px solid #f4f4f5',
                 maxHeight: expandedAdmins.has(admin.id) ? '5000px' : '0',
                 overflow: 'hidden',
                 opacity: expandedAdmins.has(admin.id) ? 1 : 0,
                 transform: expandedAdmins.has(admin.id) ? 'translateY(0)' : 'translateY(-10px)',
-                transition: 'max-height 0.4s ease, opacity 0.3s ease, transform 0.3s ease'
+                transition: 'max-height 0.4s ease, opacity 0.3s ease, transform 0.3s ease',
               }}
             >
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {adminUsers.map(user => (
-                  <Card 
-                    key={user.id} 
-                    variant="outlined" 
-                    style={{ 
-                      boxShadow: '0 1px 3px rgba(0,0,0,.06)', 
+                {adminUsers.map((user) => (
+                  <Card
+                    key={user.id}
+                    variant="outlined"
+                    style={{
+                      boxShadow: '0 1px 3px rgba(0,0,0,.06)',
                       borderRadius: 8,
-                      transition: 'all 0.3s ease'
+                      transition: 'all 0.3s ease',
                     }}
-                    styles={{ body: { 
-                      padding: 16, 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      justifyContent: 'space-between'
-                    } }}
+                    styles={{
+                      body: {
+                        padding: 16,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                      },
+                    }}
                     hoverable
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                      <Tag.CheckableTag 
-                        checked={roleFilter === 2} 
-                        onChange={() => setRoleFilter(2)} 
+                      <Tag.CheckableTag
+                        checked={roleFilter === 2}
+                        onChange={() => setRoleFilter(2)}
                         color="orange"
-                        style={{ 
-                          margin: 0, 
+                        style={{
+                          margin: 0,
                           borderRadius: 6,
-                          fontWeight: 500
+                          fontWeight: 500,
                         }}
                       >
                         普通用户
                       </Tag.CheckableTag>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <div style={{ 
-                          width: 36, 
-                          height: 36, 
-                          borderRadius: '50%', 
-                          backgroundColor: '#fff2e8', 
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          justifyContent: 'center'
-                        }}>
+                        <div
+                          style={{
+                            width: 36,
+                            height: 36,
+                            borderRadius: '50%',
+                            backgroundColor: '#fff2e8',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
                           <UserOutlined style={{ fontSize: 16, color: '#fa8c16' }} />
                         </div>
                         <span style={{ fontWeight: 500, fontSize: 15 }}>{user.username}</span>
                       </div>
                     </div>
                     <div style={{ display: 'flex', gap: 10 }}>
-                      <Button 
-                        size="small" 
+                      <Button
+                        size="small"
                         type="primary"
                         ghost
-                        icon={<KeyOutlined />} 
+                        icon={<KeyOutlined />}
                         onClick={() => {
                           const newPwd = prompt(`请输入用户 ${user.username} 的新密码:`);
-                          if(newPwd && newPwd.length >= 6) updateUserPassword(user.id, newPwd).then(() => {
-                            refetchUsers();
-                          });
+                          if (newPwd && newPwd.length >= 6)
+                            updateUserPassword(user.id, newPwd).then(() => {
+                              refetchUsers();
+                            });
                         }}
                         style={{ borderRadius: 6 }}
                       >
                         改密
                       </Button>
-                      <Popconfirm 
-                        title="确认删除?" 
+                      <Popconfirm
+                        title="确认删除?"
                         onConfirm={async () => {
                           await deleteUser(user.id);
                           refetchUsers();
                         }}
                         placement="top"
                       >
-                        <Button 
-                          danger 
-                          size="small" 
-                          icon={<DeleteOutlined />} 
-                          style={{ 
+                        <Button
+                          danger
+                          size="small"
+                          icon={<DeleteOutlined />}
+                          style={{
                             borderRadius: 6,
-                            boxShadow: '0 1px 3px rgba(255, 77, 79, 0.3)'
+                            boxShadow: '0 1px 3px rgba(255, 77, 79, 0.3)',
                           }}
                         >
                           删除
@@ -297,9 +341,9 @@ const UsersPage = ({ isOpen, onClose }) => {
   // 计算用户统计信息
   const userStats = {
     total: users.length,
-    superAdmin: users.filter(u => Number(u.roleId) === 1).length,
-    admin: users.filter(u => Number(u.roleId) === 2).length,
-    normalUser: users.filter(u => Number(u.roleId) === 3).length
+    superAdmin: users.filter((u) => Number(u.roleId) === 1).length,
+    admin: users.filter((u) => Number(u.roleId) === 2).length,
+    normalUser: users.filter((u) => Number(u.roleId) === 3).length,
   };
 
   // 主内容
@@ -308,160 +352,196 @@ const UsersPage = ({ isOpen, onClose }) => {
       {/* 顶部统计卡片 - 现代化设计 */}
       <Row gutter={24}>
         <Col xs={24} sm={12} md={6}>
-          <Card 
-          variant="outlined" 
-          hoverable 
-                    style={{ 
-            boxShadow: '0 2px 8px rgba(0,0,0,.08)', 
-            borderRadius: 16, 
-            background: 'linear-gradient(135deg, #ffffff 0%, #f8f9ff 100%)',
-            animation: 'fadeIn 0.3s ease'
-          }}
-        >
+          <Card
+            variant="outlined"
+            hoverable
+            style={{
+              boxShadow: '0 2px 8px rgba(0,0,0,.08)',
+              borderRadius: 16,
+              background: 'linear-gradient(135deg, #ffffff 0%, #f8f9ff 100%)',
+              animation: 'fadeIn 0.3s ease',
+            }}
+          >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0' }}>
               <div>
-                <Text type="secondary" style={{ fontSize: 14, fontWeight: 500, letterSpacing: 0.5 }}>总用户数</Text>
-                <Title level={3} style={{ 
-                  margin: '8px 0 0 0', 
-                  fontWeight: 700, 
-                  fontSize: 28, 
+                <Text type="secondary" style={{ fontSize: 14, fontWeight: 500, letterSpacing: 0.5 }}>
+                  总用户数
+                </Text>
+                <Title
+                  level={3}
+                  style={{
+                    margin: '8px 0 0 0',
+                    fontWeight: 700,
+                    fontSize: 28,
+                    background: 'linear-gradient(135deg, #1677ff 0%, #4096ff 100%)',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                    backgroundClip: 'text',
+                  }}
+                >
+                  {userStats.total}
+                </Title>
+              </div>
+              <div
+                style={{
+                  width: 60,
+                  height: 60,
+                  borderRadius: '50%',
                   background: 'linear-gradient(135deg, #1677ff 0%, #4096ff 100%)',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  backgroundClip: 'text'
-                }}>{userStats.total}</Title>
-              </div>
-              <div style={{ 
-                width: 60, 
-                height: 60, 
-                borderRadius: '50%', 
-                background: 'linear-gradient(135deg, #1677ff 0%, #4096ff 100%)',
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'center',
-                boxShadow: '0 8px 24px rgba(22, 119, 255, 0.2)',
-                animation: 'float 3s ease-in-out infinite'
-              }}>
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 8px 24px rgba(22, 119, 255, 0.2)',
+                  animation: 'float 3s ease-in-out infinite',
+                }}
+              >
                 <UserOutlined style={{ fontSize: 32, color: '#ffffff' }} />
               </div>
             </div>
           </Card>
         </Col>
         <Col xs={24} sm={12} md={6}>
-          <Card 
-          variant="outlined" 
-          hoverable 
-                    style={{ 
-            boxShadow: '0 2px 8px rgba(0,0,0,.08)', 
-            borderRadius: 16, 
-            background: 'linear-gradient(135deg, #ffffff 0%, #f6fff8 100%)',
-            animation: 'fadeIn 0.3s ease'
-          }}
-        >
+          <Card
+            variant="outlined"
+            hoverable
+            style={{
+              boxShadow: '0 2px 8px rgba(0,0,0,.08)',
+              borderRadius: 16,
+              background: 'linear-gradient(135deg, #ffffff 0%, #f6fff8 100%)',
+              animation: 'fadeIn 0.3s ease',
+            }}
+          >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0' }}>
               <div>
-                <Text type="secondary" style={{ fontSize: 14, fontWeight: 500, letterSpacing: 0.5 }}>超级管理员</Text>
-                <Title level={3} style={{ 
-                  margin: '8px 0 0 0', 
-                  fontWeight: 700, 
-                  fontSize: 28, 
+                <Text type="secondary" style={{ fontSize: 14, fontWeight: 500, letterSpacing: 0.5 }}>
+                  超级管理员
+                </Text>
+                <Title
+                  level={3}
+                  style={{
+                    margin: '8px 0 0 0',
+                    fontWeight: 700,
+                    fontSize: 28,
+                    background: 'linear-gradient(135deg, #1677ff 0%, #0958d9 100%)',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                    backgroundClip: 'text',
+                  }}
+                >
+                  {userStats.superAdmin}
+                </Title>
+              </div>
+              <div
+                style={{
+                  width: 60,
+                  height: 60,
+                  borderRadius: '50%',
                   background: 'linear-gradient(135deg, #1677ff 0%, #0958d9 100%)',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  backgroundClip: 'text'
-                }}>{userStats.superAdmin}</Title>
-              </div>
-              <div style={{ 
-                width: 60, 
-                height: 60, 
-                borderRadius: '50%', 
-                background: 'linear-gradient(135deg, #1677ff 0%, #0958d9 100%)',
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'center',
-                boxShadow: '0 8px 24px rgba(22, 119, 255, 0.2)',
-                animation: 'float 3s ease-in-out infinite 0.2s'
-              }}>
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 8px 24px rgba(22, 119, 255, 0.2)',
+                  animation: 'float 3s ease-in-out infinite 0.2s',
+                }}
+              >
                 <UserOutlined style={{ fontSize: 32, color: '#ffffff' }} />
               </div>
             </div>
           </Card>
         </Col>
         <Col xs={24} sm={12} md={6}>
-          <Card 
-          variant="outlined" 
-          hoverable 
-                    style={{ 
-            boxShadow: '0 2px 8px rgba(0,0,0,.08)', 
-            borderRadius: 16, 
-            background: 'linear-gradient(135deg, #ffffff 0%, #f0fff4 100%)',
-            animation: 'fadeIn 0.3s ease'
-          }}
-        >
+          <Card
+            variant="outlined"
+            hoverable
+            style={{
+              boxShadow: '0 2px 8px rgba(0,0,0,.08)',
+              borderRadius: 16,
+              background: 'linear-gradient(135deg, #ffffff 0%, #f0fff4 100%)',
+              animation: 'fadeIn 0.3s ease',
+            }}
+          >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0' }}>
               <div>
-                <Text type="secondary" style={{ fontSize: 14, fontWeight: 500, letterSpacing: 0.5 }}>普通管理员</Text>
-                <Title level={3} style={{ 
-                  margin: '8px 0 0 0', 
-                  fontWeight: 700, 
-                  fontSize: 28, 
-                  background: 'linear-gradient(135deg, #52c41a 0%, #73d13d 100%)',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  backgroundClip: 'text'
-                }}>{userStats.admin}</Title>
+                <Text type="secondary" style={{ fontSize: 14, fontWeight: 500, letterSpacing: 0.5 }}>
+                  普通管理员
+                </Text>
+                <Title
+                  level={3}
+                  style={{
+                    margin: '8px 0 0 0',
+                    fontWeight: 700,
+                    fontSize: 28,
+                    background: 'linear-gradient(135deg, #52c41a 0%, #73d13d 100%)',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                    backgroundClip: 'text',
+                  }}
+                >
+                  {userStats.admin}
+                </Title>
               </div>
-              <div style={{ 
-                width: 60, 
-                height: 60, 
-                borderRadius: '50%', 
-                background: 'linear-gradient(135deg, #52c41a 0%, #73d13d 100%)',
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'center',
-                boxShadow: '0 8px 24px rgba(82, 196, 26, 0.2)',
-                animation: 'float 3s ease-in-out infinite 0.4s'
-              }}>
+              <div
+                style={{
+                  width: 60,
+                  height: 60,
+                  borderRadius: '50%',
+                  background: 'linear-gradient(135deg, #52c41a 0%, #73d13d 100%)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 8px 24px rgba(82, 196, 26, 0.2)',
+                  animation: 'float 3s ease-in-out infinite 0.4s',
+                }}
+              >
                 <TeamOutlined style={{ fontSize: 32, color: '#ffffff' }} />
               </div>
             </div>
           </Card>
         </Col>
         <Col xs={24} sm={12} md={6}>
-          <Card 
-          variant="outlined" 
-          hoverable 
-                    style={{ 
-            boxShadow: '0 2px 8px rgba(0,0,0,.08)', 
-            borderRadius: 16, 
-            background: 'linear-gradient(135deg, #ffffff 0%, #fff7e6 100%)',
-            animation: 'fadeIn 0.3s ease'
-          }}
-        >
+          <Card
+            variant="outlined"
+            hoverable
+            style={{
+              boxShadow: '0 2px 8px rgba(0,0,0,.08)',
+              borderRadius: 16,
+              background: 'linear-gradient(135deg, #ffffff 0%, #fff7e6 100%)',
+              animation: 'fadeIn 0.3s ease',
+            }}
+          >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0' }}>
               <div>
-                <Text type="secondary" style={{ fontSize: 14, fontWeight: 500, letterSpacing: 0.5 }}>普通用户</Text>
-                <Title level={3} style={{ 
-                  margin: '8px 0 0 0', 
-                  fontWeight: 700, 
-                  fontSize: 28, 
-                  background: 'linear-gradient(135deg, #faad14 0%, #ffc53d 100%)',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  backgroundClip: 'text'
-                }}>{userStats.normalUser}</Title>
+                <Text type="secondary" style={{ fontSize: 14, fontWeight: 500, letterSpacing: 0.5 }}>
+                  普通用户
+                </Text>
+                <Title
+                  level={3}
+                  style={{
+                    margin: '8px 0 0 0',
+                    fontWeight: 700,
+                    fontSize: 28,
+                    background: 'linear-gradient(135deg, #faad14 0%, #ffc53d 100%)',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                    backgroundClip: 'text',
+                  }}
+                >
+                  {userStats.normalUser}
+                </Title>
               </div>
-              <div style={{ 
-                width: 60, 
-                height: 60, 
-                borderRadius: '50%', 
-                background: 'linear-gradient(135deg, #faad14 0%, #ffc53d 100%)',
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'center',
-                boxShadow: '0 8px 24px rgba(250, 173, 20, 0.2)',
-                animation: 'float 3s ease-in-out infinite 0.6s'
-              }}>
+              <div
+                style={{
+                  width: 60,
+                  height: 60,
+                  borderRadius: '50%',
+                  background: 'linear-gradient(135deg, #faad14 0%, #ffc53d 100%)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 8px 24px rgba(250, 173, 20, 0.2)',
+                  animation: 'float 3s ease-in-out infinite 0.6s',
+                }}
+              >
                 <UserOutlined style={{ fontSize: 32, color: '#ffffff' }} />
               </div>
             </div>
@@ -470,49 +550,56 @@ const UsersPage = ({ isOpen, onClose }) => {
       </Row>
 
       {/* 顶部操作区 - 现代化设计 */}
-      <Card 
-        variant="outlined" 
-                style={{ 
-          boxShadow: '0 2px 8px rgba(0,0,0,.08)', 
-          borderRadius: 16, 
+      <Card
+        variant="outlined"
+        style={{
+          boxShadow: '0 2px 8px rgba(0,0,0,.08)',
+          borderRadius: 16,
           background: 'linear-gradient(135deg, #ffffff 0%, #fafafa 100%)',
           padding: 24,
           animation: 'fadeIn 0.3s ease',
-          border: '1px solid rgba(22, 119, 255, 0.05)'
+          border: '1px solid rgba(22, 119, 255, 0.05)',
         }}
       >
         <Row gutter={24} align="middle" justify="space-between" style={{ width: '100%', flexWrap: 'wrap' }}>
           <Col xs={24} sm={24} md={12} style={{ marginBottom: { xs: 16, sm: 16, md: 0 } }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-              <div style={{ 
-                width: 64, 
-                height: 64, 
-                borderRadius: 16, 
-                background: 'linear-gradient(135deg, #1677ff 0%, #4096ff 100%)',
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'center',
-                boxShadow: '0 8px 24px rgba(22, 119, 255, 0.25)'
-              }}>
+              <div
+                style={{
+                  width: 64,
+                  height: 64,
+                  borderRadius: 16,
+                  background: 'linear-gradient(135deg, #1677ff 0%, #4096ff 100%)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 8px 24px rgba(22, 119, 255, 0.25)',
+                }}
+              >
                 <TeamOutlined style={{ fontSize: 32, color: '#ffffff' }} />
               </div>
               <div>
-                <Title level={3} style={{ 
-                  margin: 0, 
-                  fontWeight: 700, 
-                  fontSize: 24,
-                  background: 'linear-gradient(135deg, #262626 0%, #595959 100%)',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  backgroundClip: 'text'
-                }}>用户管理</Title>
+                <Title
+                  level={3}
+                  style={{
+                    margin: 0,
+                    fontWeight: 700,
+                    fontSize: 24,
+                    background: 'linear-gradient(135deg, #262626 0%, #595959 100%)',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                    backgroundClip: 'text',
+                  }}
+                >
+                  用户管理
+                </Title>
                 <Text type="secondary" style={{ fontSize: 14, fontWeight: 500, letterSpacing: 0.5 }}>
                   精细化管理系统用户与权限
                 </Text>
               </div>
             </div>
           </Col>
-          
+
           <Col xs={24} sm={24} md={12}>
             <Row gutter={16} align="middle" justify="end" wrap>
               <Col>
@@ -521,39 +608,41 @@ const UsersPage = ({ isOpen, onClose }) => {
                   prefix={<SearchOutlined style={{ color: '#1677ff', fontSize: 16 }} />}
                   value={searchText}
                   onChange={(e) => setSearchText(e.target.value)}
-                  style={{ 
-                    width: { xs: '100%', sm: 220 }, 
-                    borderRadius: 12, 
+                  style={{
+                    width: { xs: '100%', sm: 220 },
+                    borderRadius: 12,
                     boxShadow: '0 1px 3px rgba(0,0,0,.06)',
                     border: '1px solid #f4f4f5',
                     padding: '8px 16px',
-                    transition: 'all 0.3s ease'
+                    transition: 'all 0.3s ease',
                   }}
                   allowClear
                 />
               </Col>
-              
+
               <Col>
-                <div style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: 12, 
-                  padding: '12px 20px', 
-                  backgroundColor: '#f0f5ff',
-                  borderRadius: 12,
-                  border: '2px solid #f4f4f5'
-                }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                    padding: '12px 20px',
+                    backgroundColor: '#f0f5ff',
+                    borderRadius: 12,
+                    border: '2px solid #f4f4f5',
+                  }}
+                >
                   <FilterOutlined style={{ color: '#1677ff', fontSize: 18, fontWeight: 600 }} />
                   <Space wrap>
                     <Tag.CheckableTag
                       checked={roleFilter === null}
                       onChange={() => setRoleFilter(null)}
-                      style={{ 
-                        borderRadius: 10, 
-                        fontWeight: roleFilter === null ? 700 : 500, 
+                      style={{
+                        borderRadius: 10,
+                        fontWeight: roleFilter === null ? 700 : 500,
                         transition: 'all 0.3s ease',
                         padding: '4px 12px',
-                        fontSize: 13
+                        fontSize: 13,
                       }}
                     >
                       全部
@@ -562,12 +651,12 @@ const UsersPage = ({ isOpen, onClose }) => {
                       checked={roleFilter === 1}
                       onChange={() => setRoleFilter(1)}
                       color="default"
-                      style={{ 
-                        borderRadius: 10, 
-                        fontWeight: roleFilter === 1 ? 700 : 500, 
+                      style={{
+                        borderRadius: 10,
+                        fontWeight: roleFilter === 1 ? 700 : 500,
                         transition: 'all 0.3s ease',
                         padding: '4px 12px',
-                        fontSize: 13
+                        fontSize: 13,
                       }}
                     >
                       超级管理员
@@ -576,12 +665,12 @@ const UsersPage = ({ isOpen, onClose }) => {
                       checked={roleFilter === 2}
                       onChange={() => setRoleFilter(2)}
                       color="green"
-                      style={{ 
-                        borderRadius: 10, 
-                        fontWeight: roleFilter === 2 ? 700 : 500, 
+                      style={{
+                        borderRadius: 10,
+                        fontWeight: roleFilter === 2 ? 700 : 500,
                         transition: 'all 0.3s ease',
                         padding: '4px 12px',
-                        fontSize: 13
+                        fontSize: 13,
                       }}
                     >
                       普通管理员
@@ -590,12 +679,12 @@ const UsersPage = ({ isOpen, onClose }) => {
                       checked={roleFilter === 3}
                       onChange={() => setRoleFilter(3)}
                       color="orange"
-                      style={{ 
-                        borderRadius: 10, 
-                        fontWeight: roleFilter === 3 ? 700 : 500, 
+                      style={{
+                        borderRadius: 10,
+                        fontWeight: roleFilter === 3 ? 700 : 500,
                         transition: 'all 0.3s ease',
                         padding: '4px 12px',
-                        fontSize: 13
+                        fontSize: 13,
                       }}
                     >
                       普通用户
@@ -603,24 +692,24 @@ const UsersPage = ({ isOpen, onClose }) => {
                   </Space>
                 </div>
               </Col>
-              
+
               <Col>
-                <Button 
-                  type="primary" 
-                  icon={<UserAddOutlined />} 
+                <Button
+                  type="primary"
+                  icon={<UserAddOutlined />}
                   onClick={() => {
                     setEditUser(null);
                     setSelectedAdminId(null);
                     setIsDrawerOpen(true);
                   }}
                   size="large"
-                                    style={{ 
-                    borderRadius: 12, 
-                    padding: '12px 32px', 
+                  style={{
+                    borderRadius: 12,
+                    padding: '12px 32px',
                     boxShadow: '0 8px 24px rgba(22, 119, 255, 0.3)',
                     fontSize: 16,
                     fontWeight: 600,
-                    letterSpacing: 0.5
+                    letterSpacing: 0.5,
                   }}
                 >
                   新增用户
@@ -630,86 +719,102 @@ const UsersPage = ({ isOpen, onClose }) => {
           </Col>
         </Row>
       </Card>
-      
-      <Card 
-        variant="outlined" 
-        style={{ 
-          boxShadow: '0 4px 12px rgba(0,0,0,.1)', 
-          flex: 1, 
+
+      <Card
+        variant="outlined"
+        style={{
+          boxShadow: '0 4px 12px rgba(0,0,0,.1)',
+          flex: 1,
           borderRadius: 16,
           overflow: 'hidden',
           transition: 'all 0.3s ease',
           border: '1px solid rgba(22, 119, 255, 0.05)',
-          background: 'linear-gradient(135deg, #ffffff 0%, #fafafa 100%)'
+          background: 'linear-gradient(135deg, #ffffff 0%, #fafafa 100%)',
         }}
-        styles={{ body: { height: 'auto', display: 'flex', flexDirection: 'column', gap: 28, padding: 24 }}}
+        styles={{ body: { height: 'auto', display: 'flex', flexDirection: 'column', gap: 28, padding: 24 } }}
       >
-        {/* 超级管理员显示分组视图 - 仅在未选择角色筛选时显示 */}
-        {Number(user?.roleId) === 1 && roleFilter === null && (
+        {/* 超级管理员显示分组视图 - 仅在未选择角色/状态筛选时显示 */}
+        {Number(user?.roleId) === 1 && roleFilter === null && statusFilter === 'all' && (
           <div style={{ transition: 'all 0.3s ease', animation: 'fadeIn 0.3s ease' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{ 
-                  width: 40, 
-                  height: 40, 
-                  borderRadius: 8, 
-                  backgroundColor: '#f4f4f5', 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  justifyContent: 'center'
-                }}>
+                <div
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 8,
+                    backgroundColor: '#f4f4f5',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
                   <ClusterOutlined style={{ fontSize: 20, color: '#111' }} />
                 </div>
-                <Title level={4} style={{ margin: 0, fontWeight: 600 }}>管理员-用户分组</Title>
+                <Title level={4} style={{ margin: 0, fontWeight: 600 }}>
+                  管理员-用户分组
+                </Title>
               </div>
               <Text type="secondary" style={{ fontSize: 14 }}>
                 共 {adminUsersMap ? adminUsersMap.size : 0} 个管理员组
               </Text>
             </div>
             <Divider style={{ margin: '0 0 24px 0', borderColor: '#f0f5ff', borderWidth: 2 }} />
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {renderAdminUserGroups()}
-            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>{renderAdminUserGroups()}</div>
           </div>
         )}
-        
+
         {/* 表格视图，应用角色过滤 */}
         <div style={{ flex: 1, minHeight: 300, animation: 'fadeIn 0.3s ease', transition: 'all 0.3s ease' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{ 
-                width: 40, 
-                height: 40, 
-                borderRadius: 8, 
-                backgroundColor: '#f4f4f5', 
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'center'
-              }}>
+              <div
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 8,
+                  backgroundColor: '#f4f4f5',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
                 <UserOutlined style={{ fontSize: 20, color: '#111' }} />
               </div>
-              <Title level={4} style={{ margin: 0, fontWeight: 600 }}>用户列表</Title>
+              <Title level={4} style={{ margin: 0, fontWeight: 600 }}>
+                用户列表
+              </Title>
+              {Number(user?.roleId) === 1 && (
+                <Segmented
+                  value={statusFilter}
+                  onChange={(v) => setStatusFilter(v)}
+                  options={[
+                    { label: '全部', value: 'all' },
+                    { label: pendingCount > 0 ? `待审核 (${pendingCount})` : '待审核', value: 'pending' },
+                  ]}
+                />
+              )}
             </div>
             <Text type="secondary" style={{ fontSize: 14 }}>
               显示 {searchFilteredUsers.length} 个用户
             </Text>
           </div>
           <Divider style={{ margin: '0 0 24px 0', borderColor: '#f0f5ff', borderWidth: 2 }} />
-          <Card 
-            variant="outlined" 
-            style={{ 
-              height: 'auto', 
-              borderRadius: 8, 
+          <Card
+            variant="outlined"
+            style={{
+              height: 'auto',
+              borderRadius: 8,
               backgroundColor: '#fff',
               boxShadow: '0 1px 3px rgba(0,0,0,.06)',
-              transition: 'all 0.3s ease'
+              transition: 'all 0.3s ease',
             }}
-            styles={{ body: { height: 'auto', padding: 16 }}}
+            styles={{ body: { height: 'auto', padding: 16 } }}
           >
-            <UserTable 
-              users={searchFilteredUsers} 
-              allUsers={users} 
-              projects={projects} 
+            <UserTable
+              users={searchFilteredUsers}
+              allUsers={users}
+              projects={projects}
               loading={usersLoading}
               onRoleChange={handleRoleChange}
               onUserUpdate={handleUserUpdate}
@@ -737,8 +842,9 @@ const UsersPage = ({ isOpen, onClose }) => {
   );
 
   // 条件渲染：如果提供了isOpen和onClose，则作为Modal组件，否则作为独立页面
-  const content = isOpen !== undefined && onClose ? (
-    <Modal
+  const content =
+    isOpen !== undefined && onClose ? (
+      <Modal
         open={isOpen}
         onCancel={onClose}
         width={1300}
@@ -754,17 +860,15 @@ const UsersPage = ({ isOpen, onClose }) => {
           overflowY: 'auto',
           overflowX: 'hidden',
           display: 'flex',
-          flexDirection: 'column'
+          flexDirection: 'column',
         }}
         header={null} // 不使用默认标题，使用自定义的
       >
-      {mainContent}
-    </Modal>
-  ) : (
-    <div style={{ padding: 24, backgroundColor: '#f5f5f5', minHeight: '100vh' }}>
-      {mainContent}
-    </div>
-  );
+        {mainContent}
+      </Modal>
+    ) : (
+      <div style={{ padding: 24, backgroundColor: '#f5f5f5', minHeight: '100vh' }}>{mainContent}</div>
+    );
 
   return content;
 };

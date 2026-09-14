@@ -38,6 +38,7 @@ import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   ControlOutlined,
+  HistoryOutlined,
 } from '@ant-design/icons';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -59,6 +60,7 @@ import {
 
 // 引入子组件
 import UsersPage from './UsersPage';
+import OperationLogsModal from '../components/operation/OperationLogsModal';
 import ProgramDetailPage from './ProgramDetailPage';
 import StatsCards from '../components/StatsCards';
 import Logo from '../components/Logo';
@@ -96,6 +98,7 @@ const ProgramsPage = () => {
 
   // 模态框控制
   const [showUsersModal, setShowUsersModal] = useState(false);
+  const [showOpLogsModal, setShowOpLogsModal] = useState(false);
   const [showLogDrawer, setShowLogDrawer] = useState(false);
   const [showProjectModal, setShowProjectModal] = useState(false);
   const [showPwdModal, setShowPwdModal] = useState(false);
@@ -444,7 +447,10 @@ const ProgramsPage = () => {
       ellipsis: { showTitle: false },
       render: (text) => {
         // 简化显示：api-kafka-subscribe:api-kafka-subscribe_00 → api-kafka-subscribe_00
-        const short = text.includes(':') ? text.split(':').pop() : text;
+        // 冒号后是纯数字（process_name=%(process_num)02d 裸序号命名）时保留全名，避免只剩 00/01
+        const parts = text.split(':');
+        const last = parts[parts.length - 1];
+        const short = parts.length > 1 && !/^\d+$/.test(last) ? last : text;
         return (
           <Tooltip title={text} placement="topLeft">
             <span style={{ fontSize: 14, fontWeight: 500 }}>{short}</span>
@@ -528,6 +534,16 @@ const ProgramsPage = () => {
               label: '用户管理',
               icon: <UserOutlined />,
               onClick: () => setShowUsersModal(true),
+            },
+          ]
+        : []),
+      ...(user?.roleId === 1
+        ? [
+            {
+              key: 'oplogs',
+              label: '操作记录',
+              icon: <HistoryOutlined />,
+              onClick: () => setShowOpLogsModal(true),
             },
           ]
         : []),
@@ -842,6 +858,7 @@ const ProgramsPage = () => {
 
       {/* 弹窗组件挂载区 */}
       <UsersPage isOpen={showUsersModal} onClose={() => setShowUsersModal(false)} />
+      <OperationLogsModal open={showOpLogsModal} onClose={() => setShowOpLogsModal(false)} />
 
       <ProgramDetailPage isOpen={showLogDrawer} onClose={() => setShowLogDrawer(false)} programId={selectedProgramId} />
 
